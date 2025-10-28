@@ -239,6 +239,13 @@ final class MenuBarManager: ObservableObject {
         openItem.target = self
         menu.addItem(openItem)
         
+        // Show What's New (for testing)
+        #if DEBUG
+        let whatsNewItem = NSMenuItem(title: "Show What's New", action: #selector(showWhatsNew), keyEquivalent: "")
+        whatsNewItem.target = self
+        menu.addItem(whatsNewItem)
+        #endif
+        
         // Check for Updates
         let updateItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates(_:)), keyEquivalent: "")
         updateItem.target = self
@@ -318,6 +325,11 @@ final class MenuBarManager: ObservableObject {
                 msg.runModal()
             }
         }
+    }
+    
+    @objc private func showWhatsNew() {
+        // Post notification to show What's New view
+        NotificationCenter.default.post(name: NSNotification.Name("ShowWhatsNew"), object: nil)
     }
     
     @objc private func openMainWindow() {

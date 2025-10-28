@@ -98,6 +98,9 @@ struct ContentView: View {
     
     // MARK: - AI Enhancement checkbox state
     @State private var enableAIProcessing: Bool = false
+    
+    // What's New Sheet
+    @State private var showWhatsNewSheet: Bool = false
     @State private var enableDebugLogs: Bool = SettingsStore.shared.enableDebugLogs
     @State private var pressAndHoldModeEnabled: Bool = SettingsStore.shared.pressAndHoldMode
     @State private var enableStreamingPreview: Bool = SettingsStore.shared.enableStreamingPreview
@@ -160,6 +163,9 @@ struct ContentView: View {
         }
         .withMouseTracking(mouseTracker)
         .environmentObject(mouseTracker)
+        .sheet(isPresented: $showWhatsNewSheet) {
+            WhatsNewView()
+        }
         .onAppear {
             appear = true
             accessibilityEnabled = checkAccessibilityPermissions()
@@ -1307,6 +1313,29 @@ struct ContentView: View {
                                     .font(.caption2)
                                     .foregroundStyle(.secondary.opacity(0.7))
                             }
+                            
+                            // What's New Button
+                            Button(action: {
+                                DispatchQueue.main.async {
+                                    showWhatsNewSheet = true
+                                }
+                            }) {
+                                Text("What's New")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        LinearGradient(
+                                            colors: [Color.blue.opacity(0.8), Color.blue.opacity(0.6)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 8)
                         }
                     }
                     .padding(24)

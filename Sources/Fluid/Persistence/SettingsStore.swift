@@ -33,6 +33,7 @@ final class SettingsStore
         static let copyTranscriptionToClipboard = "CopyTranscriptionToClipboard"
         static let autoUpdateCheckEnabled = "AutoUpdateCheckEnabled"
         static let lastUpdateCheckDate = "LastUpdateCheckDate"
+        static let lastSeenVersion = "LastSeenVersion"
     }
 
     struct SavedProvider: Codable, Identifiable, Hashable
@@ -258,6 +259,30 @@ final class SettingsStore
 
     func updateLastCheckDate() {
         lastUpdateCheckDate = Date()
+    }
+
+    // MARK: - What's New Tracking
+
+    var lastSeenVersion: String? {
+        get { defaults.string(forKey: Keys.lastSeenVersion) }
+        set { defaults.set(newValue, forKey: Keys.lastSeenVersion) }
+    }
+
+    func shouldShowWhatsNew() -> Bool {
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        
+        guard let lastSeen = lastSeenVersion else {
+            // First launch, don't show what's new
+            lastSeenVersion = currentVersion
+            return false
+        }
+        
+        // Show if versions are different
+        return lastSeen != currentVersion
+    }
+
+    func markWhatsNewAsSeen() {
+        lastSeenVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
     }
 
     // MARK: - Private Methods

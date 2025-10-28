@@ -13,6 +13,7 @@ import ApplicationServices
 struct fluidApp: App {
     @StateObject private var menuBarManager = MenuBarManager()
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @State private var showWhatsNew = false
 
     init() {
         // Note: App UI is designed with dark color scheme in mind
@@ -25,6 +26,18 @@ struct fluidApp: App {
             ContentView()
                 .environmentObject(menuBarManager)
                 .preferredColorScheme(.dark) // Force dark mode to prevent UI issues
+                .sheet(isPresented: $showWhatsNew) {
+                    WhatsNewView()
+                }
+                .onAppear {
+                    // Check if we should show what's new after a short delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showWhatsNew = SettingsStore.shared.shouldShowWhatsNew()
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowWhatsNew"))) { _ in
+                    showWhatsNew = true
+                }
         }
     }
 }

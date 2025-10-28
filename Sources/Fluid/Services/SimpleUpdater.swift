@@ -35,6 +35,9 @@ struct GHRelease: Decodable {
     let tag_name: String
     let prerelease: Bool
     let assets: [Asset]
+    let body: String?
+    let name: String?
+    let published_at: String?
 }
 
 @MainActor
@@ -46,6 +49,33 @@ final class SimpleUpdater {
     private let allowedTeamIDs: Set<String> = [
         "V4J43B279J"
     ]
+
+    // Fetch latest release notes from GitHub
+    func fetchLatestReleaseNotes(owner: String, repo: String) async throws -> (version: String, notes: String) {
+        let releasesURL = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases")!
+        
+        let (data, response) = try await URLSession.shared.data(from: releasesURL)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw SimpleUpdateError.invalidResponse
+        }
+        
+        let releases: [GHRelease]
+        do {
+            releases = try JSONDecoder().decode([GHRelease].self, from: data)
+        } catch {
+            throw SimpleUpdateError.jsonDecoding
+        }
+        
+        // Get latest non-prerelease release
+        guard let latest = releases.first(where: { !$0.prerelease }) else {
+            throw SimpleUpdateError.noSuitableRelease
+        }
+        
+        let version = latest.tag_name
+        let notes = latest.body ?? "No release notes available."
+        
+        return (version, notes)
+    }
 
     // Silent check that returns update info without showing alerts or installing
     func checkForUpdate(owner: String, repo: String) async throws -> (hasUpdate: Bool, latestVersion: String) {
