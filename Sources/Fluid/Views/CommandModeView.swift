@@ -43,9 +43,13 @@ struct CommandModeView: View {
         }
         .onAppear {
             updateAvailableModels()
-            // Note: Overlay mode is now set centrally by ContentView.handleModeTransition()
+            // Disable notch output when using in-app UI (conversation is shared but notch shouldn't show)
+            service.enableNotchOutput = false
         }
-        // Note: onDisappear overlay mode handling removed - now handled centrally by ContentView
+        .onDisappear {
+            // Re-enable notch output when leaving in-app UI
+            service.enableNotchOutput = true
+        }
         .onChange(of: asr.finalText) { newText in
             if !newText.isEmpty {
                 inputText = newText
@@ -80,6 +84,65 @@ struct CommandModeView: View {
             
             Spacer()
             
+            // Chat management buttons
+            HStack(spacing: 4) {
+                // New Chat Button
+                Button(action: { service.createNewChat() }) {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.bordered)
+                .help("New chat")
+                .disabled(service.isProcessing)
+                
+                // Recent Chats Menu
+                Menu {
+                    let recentChats = service.getRecentChats()
+                    if recentChats.isEmpty {
+                        Text("No recent chats")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(recentChats) { chat in
+                            Button(action: { 
+                                if chat.id != service.currentChatID {
+                                    service.switchToChat(id: chat.id)
+                                }
+                            }) {
+                                HStack {
+                                    if chat.id == service.currentChatID {
+                                        Image(systemName: "checkmark")
+                                            .font(.caption)
+                                    }
+                                    Text(chat.title)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Text(chat.relativeTimeString)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .disabled(service.isProcessing)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 32, height: 24)
+                .help("Recent chats")
+                
+                // Delete Chat Button - deletes the current chat entirely
+                Button(action: { showingClearConfirmation = true }) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.bordered)
+                .help("Delete chat")
+                .disabled(service.isProcessing)
+            }
+            
+            Divider()
+                .frame(height: 20)
+                .padding(.horizontal, 8)
+            
             // Confirm Before Execute Toggle
             Toggle(isOn: $settings.commandModeConfirmBeforeExecute) {
                 Label("Confirm", systemImage: "checkmark.shield")
@@ -87,61 +150,16 @@ struct CommandModeView: View {
             }
             .toggleStyle(.checkbox)
             .help("Ask for confirmation before running commands")
-            
-            Divider()
-                .frame(height: 20)
-                .padding(.horizontal, 8)
-            
-            // Provider Selector (independent for Command Mode)
-            Picker("", selection: $settings.commandModeSelectedProviderID) {
-                Text("OpenAI").tag("openai")
-                Text("Groq").tag("groq")
-                
-                // Apple Intelligence - disabled for Command Mode (no tool support)
-                Text("Apple Intelligence (No tools)")
-                    .foregroundColor(.secondary)
-                    .tag("apple-intelligence-disabled")
-                
-                ForEach(settings.savedProviders) { provider in
-                    Text(provider.name).tag(provider.id)
-                }
-            }
-            .frame(width: 140)
-            .onChange(of: settings.commandModeSelectedProviderID) { newValue in
-                // Prevent selecting disabled Apple Intelligence
-                if newValue == "apple-intelligence-disabled" || newValue == "apple-intelligence" {
-                    settings.commandModeSelectedProviderID = "openai"
-                }
-            }
-            
-            // Model Selector
-            Picker("", selection: Binding(
-                get: { settings.commandModeSelectedModel ?? availableModels.first ?? "gpt-4o" },
-                set: { settings.commandModeSelectedModel = $0 }
-            )) {
-                ForEach(availableModels, id: \.self) { model in
-                    Text(model).tag(model)
-                }
-            }
-            .frame(width: 160)
-            
-            // Clear Chat
-            Button(action: { showingClearConfirmation = true }) {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.bordered)
-            .help("Clear conversation")
-            .disabled(service.conversationHistory.isEmpty)
         }
         .padding()
         .background(Color(nsColor: .windowBackgroundColor))
         .confirmationDialog(
-            "Clear conversation?",
+            "Delete this chat?",
             isPresented: $showingClearConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Clear", role: .destructive) {
-                service.clearHistory()
+            Button("Delete", role: .destructive) {
+                service.deleteCurrentChat()
             }
             Button("Cancel", role: .cancel) {}
         }
@@ -419,7 +437,41 @@ struct CommandModeView: View {
     // MARK: - Input Area
     
     private var inputArea: some View {
-        HStack {
+        HStack(spacing: 8) {
+            // Provider Selector (compact)
+            Picker("", selection: $settings.commandModeSelectedProviderID) {
+                Text("OpenAI").tag("openai")
+                Text("Groq").tag("groq")
+                
+                // Apple Intelligence - disabled for Command Mode (no tool support)
+                Text("Apple Intelligence (No tools)")
+                    .foregroundColor(.secondary)
+                    .tag("apple-intelligence-disabled")
+                
+                ForEach(settings.savedProviders) { provider in
+                    Text(provider.name).tag(provider.id)
+                }
+            }
+            .frame(width: 110)
+            .onChange(of: settings.commandModeSelectedProviderID) { newValue in
+                // Prevent selecting disabled Apple Intelligence
+                if newValue == "apple-intelligence-disabled" || newValue == "apple-intelligence" {
+                    settings.commandModeSelectedProviderID = "openai"
+                }
+            }
+            
+            // Model Selector (compact)
+            Picker("", selection: Binding(
+                get: { settings.commandModeSelectedModel ?? availableModels.first ?? "gpt-4o" },
+                set: { settings.commandModeSelectedModel = $0 }
+            )) {
+                ForEach(availableModels, id: \.self) { model in
+                    Text(model).tag(model)
+                }
+            }
+            .frame(width: 130)
+            
+            // Input field (flexible)
             TextField("Type a command or ask a question...", text: $inputText)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit {

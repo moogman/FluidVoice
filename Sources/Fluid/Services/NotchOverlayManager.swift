@@ -50,6 +50,11 @@ final class NotchOverlayManager {
     var onCommandFollowUp: ((String) async -> Void)?
     var onNotchClicked: (() -> Void)?  // Called when regular notch is clicked in command mode
     
+    // Callbacks for chat management
+    var onNewChat: (() -> Void)?
+    var onSwitchChat: ((String) -> Void)?
+    var onClearChat: (() -> Void)?
+    
     // Generation counter to track show/hide cycles and prevent race conditions
     // Uses UInt64 to avoid overflow concerns in long-running sessions
     private var generation: UInt64 = 0
@@ -302,6 +307,25 @@ final class NotchOverlayManager {
                 },
                 onSubmit: { [weak self] text in
                     await self?.onCommandFollowUp?(text)
+                },
+                onNewChat: { [weak self] in
+                    Task { @MainActor in
+                        self?.onNewChat?()
+                        // Refresh recent chats in notch state
+                        NotchContentState.shared.refreshRecentChats()
+                    }
+                },
+                onSwitchChat: { [weak self] chatID in
+                    Task { @MainActor in
+                        self?.onSwitchChat?(chatID)
+                        // Refresh recent chats in notch state
+                        NotchContentState.shared.refreshRecentChats()
+                    }
+                },
+                onClearChat: { [weak self] in
+                    Task { @MainActor in
+                        self?.onClearChat?()
+                    }
                 }
             )
         } compactLeading: {

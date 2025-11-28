@@ -30,6 +30,10 @@ class NotchContentState: ObservableObject {
     @Published var commandConversationHistory: [CommandOutputMessage] = []
     @Published var isCommandProcessing: Bool = false
     
+    // MARK: - Chat History State
+    @Published var recentChats: [ChatSession] = []
+    @Published var currentChatTitle: String = "New Chat"
+    
     // Command output message model
     struct CommandOutputMessage: Identifiable, Equatable {
         let id = UUID()
@@ -147,6 +151,16 @@ class NotchContentState: ObservableObject {
     /// Hide expanded view but keep history
     func collapseCommandOutput() {
         isExpandedForCommandOutput = false
+    }
+    
+    // MARK: - Chat History Methods
+    
+    /// Refresh recent chats from store
+    func refreshRecentChats() {
+        recentChats = ChatHistoryStore.shared.getRecentChats(excludingCurrent: false)
+        if let current = ChatHistoryStore.shared.currentSession {
+            currentChatTitle = current.title
+        }
     }
 }
 
@@ -460,11 +474,18 @@ struct NotchCommandOutputExpandedView: View {
     let audioPublisher: AnyPublisher<CGFloat, Never>
     let onDismiss: () -> Void
     let onSubmit: (String) async -> Void
+    let onNewChat: () -> Void
+    let onSwitchChat: (String) -> Void
+    let onClearChat: () -> Void
     
     @ObservedObject private var contentState = NotchContentState.shared
     @State private var inputText: String = ""
     @FocusState private var isInputFocused: Bool
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var isHoveringNewChat = false
+    @State private var isHoveringRecent = false
+    @State private var isHoveringClear = false
+    @State private var isHoveringDismiss = false
     
     private let commandRed = Color(red: 1.0, green: 0.35, blue: 0.35)
     
@@ -522,8 +543,8 @@ struct NotchCommandOutputExpandedView: View {
     // MARK: - Header
     
     private var headerView: some View {
-        ZStack {
-            // Centered content: Waveform + Mode label
+        HStack(spacing: 8) {
+            // Left: Waveform + Mode label
             HStack(spacing: 6) {
                 // Waveform - only show when recording, otherwise show static indicator
                 if contentState.isRecordingInExpandedMode {
@@ -555,27 +576,119 @@ struct NotchCommandOutputExpandedView: View {
                 }
             }
             
-            // Right-aligned dismiss button - styled red with hover effect
-            HStack {
-                Spacer()
-                Button(action: onDismiss) {
+            Spacer()
+            
+            // Right: Chat management buttons + Dismiss
+            HStack(spacing: 6) {
+                // New Chat Button (+)
+                Button(action: onNewChat) {
                     ZStack {
                         Circle()
-                            .fill(commandRed.opacity(0.15))
-                            .frame(width: 24, height: 24)
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(commandRed.opacity(0.8))
+                            .fill(isHoveringNewChat ? commandRed.opacity(0.25) : commandRed.opacity(0.12))
+                            .frame(width: 22, height: 22)
+                        Image(systemName: "plus")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(contentState.isCommandProcessing ? .white.opacity(0.3) : commandRed.opacity(0.85))
                     }
                 }
                 .buttonStyle(.plain)
                 .contentShape(Circle())
-                .frame(width: 32, height: 32)  // Larger hit area
+                .onHover { isHoveringNewChat = $0 }
+                .disabled(contentState.isCommandProcessing)
+                .help("New chat")
+                
+                // Recent Chats Menu
+                Menu {
+                    let recentChats = contentState.recentChats
+                    let currentID = ChatHistoryStore.shared.currentChatID
+                    if recentChats.isEmpty {
+                        Text("No recent chats")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(recentChats) { chat in
+                            Button(action: { 
+                                if chat.id != currentID {
+                                    onSwitchChat(chat.id) 
+                                }
+                            }) {
+                                HStack {
+                                    if chat.id == currentID {
+                                        Image(systemName: "checkmark")
+                                            .font(.caption)
+                                    }
+                                    Text(chat.title)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Text(chat.relativeTimeString)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .disabled(contentState.isCommandProcessing)
+                        }
+                    }
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(isHoveringRecent ? commandRed.opacity(0.25) : commandRed.opacity(0.12))
+                            .frame(width: 22, height: 22)
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(commandRed.opacity(0.85))
+                    }
+                }
+                .menuIndicator(.hidden)
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .frame(width: 22, height: 22)
+                .onHover { isHoveringRecent = $0 }
+                .help("Recent chats")
+                
+                // Delete Chat Button - deletes the current chat entirely
+                Button(action: onClearChat) {
+                    ZStack {
+                        Circle()
+                            .fill(isHoveringClear ? commandRed.opacity(0.25) : commandRed.opacity(0.12))
+                            .frame(width: 22, height: 22)
+                        Image(systemName: "trash")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(contentState.isCommandProcessing ? .white.opacity(0.3) : commandRed.opacity(0.85))
+                    }
+                }
+                .buttonStyle(.plain)
+                .contentShape(Circle())
+                .onHover { isHoveringClear = $0 }
+                .disabled(contentState.isCommandProcessing)
+                .help("Delete chat")
+                
+                // Vertical divider
+                Rectangle()
+                    .fill(.white.opacity(0.15))
+                    .frame(width: 1, height: 14)
+                    .padding(.horizontal, 2)
+                
+                // Dismiss Button (X)
+                Button(action: onDismiss) {
+                    ZStack {
+                        Circle()
+                            .fill(isHoveringDismiss ? commandRed.opacity(0.25) : commandRed.opacity(0.12))
+                            .frame(width: 22, height: 22)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(commandRed.opacity(0.85))
+                    }
+                }
+                .buttonStyle(.plain)
+                .contentShape(Circle())
+                .onHover { isHoveringDismiss = $0 }
                 .help("Close (Escape)")
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .onAppear {
+            contentState.refreshRecentChats()
+        }
     }
     
     // MARK: - Transcription Preview (shown while recording)

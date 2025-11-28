@@ -169,6 +169,7 @@ struct WelcomeView: View {
                                 .foregroundStyle(.green)
                             Text("How to Use")
                                 .font(.system(size: 15, weight: .semibold))
+                            Spacer()
                         }
 
                         VStack(alignment: .leading, spacing: 12) {
@@ -188,6 +189,7 @@ struct WelcomeView: View {
                                         .font(.system(size: 13))
                                         .foregroundStyle(.secondary)
                                 }
+                                Spacer()
                             }
 
                             HStack(alignment: .top, spacing: 10) {
@@ -206,6 +208,7 @@ struct WelcomeView: View {
                                         .font(.system(size: 13))
                                         .foregroundStyle(.secondary)
                                 }
+                                Spacer()
                             }
 
                             HStack(alignment: .top, spacing: 10) {
@@ -224,10 +227,12 @@ struct WelcomeView: View {
                                         .font(.system(size: 13))
                                         .foregroundStyle(.secondary)
                                 }
+                                Spacer()
                             }
                         }
                         .padding(.vertical, 8)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
                 }
                 .frame(maxWidth: .infinity)

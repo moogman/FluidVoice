@@ -180,6 +180,24 @@ struct ContentView: View {
                 }
             }
             
+            // Set up command mode callbacks for notch
+            NotchOverlayManager.shared.onCommandFollowUp = { [weak commandModeService] text in
+                await commandModeService?.processFollowUpCommand(text)
+            }
+            
+            // Chat management callbacks
+            NotchOverlayManager.shared.onNewChat = { [weak commandModeService] in
+                commandModeService?.createNewChat()
+            }
+            
+            NotchOverlayManager.shared.onSwitchChat = { [weak commandModeService] chatID in
+                commandModeService?.switchToChat(id: chatID)
+            }
+            
+            NotchOverlayManager.shared.onClearChat = { [weak commandModeService] in
+                commandModeService?.deleteCurrentChat()
+            }
+            
             // Start polling for accessibility permission if not granted
             startAccessibilityPolling()
             

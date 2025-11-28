@@ -17,7 +17,7 @@ struct RewriteModeView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
+            // Header - cleaner, just title and close
             HStack {
                 Image(systemName: "pencil.and.outline")
                     .font(.title2)
@@ -27,50 +27,6 @@ struct RewriteModeView: View {
                     .fontWeight(.bold)
                 
                 Spacer()
-                
-                // Provider Selector (independent for Write Mode)
-                Picker("", selection: $settings.rewriteModeSelectedProviderID) {
-                    Text("OpenAI").tag("openai")
-                    Text("Groq").tag("groq")
-                    
-                    // Apple Intelligence
-                    if AppleIntelligenceService.isAvailable {
-                        Text("Apple Intelligence").tag("apple-intelligence")
-                    } else {
-                        Text("Apple Intelligence (Unavailable)")
-                            .foregroundColor(.secondary)
-                            .tag("apple-intelligence-disabled")
-                    }
-                    
-                    ForEach(settings.savedProviders) { provider in
-                        Text(provider.name).tag(provider.id)
-                    }
-                }
-                .frame(width: 140)
-                .onChange(of: settings.rewriteModeSelectedProviderID) { newValue in
-                    // Prevent selecting disabled Apple Intelligence
-                    if newValue == "apple-intelligence-disabled" {
-                        settings.rewriteModeSelectedProviderID = "openai"
-                    }
-                    updateAvailableModels()
-                }
-                
-                // Model Selector (hidden for Apple Intelligence)
-                if settings.rewriteModeSelectedProviderID != "apple-intelligence" {
-                    Picker("", selection: Binding(
-                        get: { settings.rewriteModeSelectedModel ?? availableModels.first ?? "gpt-4o" },
-                        set: { settings.rewriteModeSelectedModel = $0 }
-                    )) {
-                        ForEach(availableModels, id: \.self) { model in
-                            Text(model).tag(model)
-                        }
-                    }
-                    .frame(width: 140)
-                }
-                
-                Divider()
-                    .frame(height: 20)
-                    .padding(.horizontal, 4)
                 
                 Button(action: { onClose?() }) {
                     Image(systemName: "xmark.circle.fill")
@@ -186,8 +142,49 @@ struct RewriteModeView: View {
             
             Divider()
             
-            // Input Area
-            HStack {
+            // Input Area with model selectors inline
+            HStack(spacing: 8) {
+                // Provider Selector (compact)
+                Picker("", selection: $settings.rewriteModeSelectedProviderID) {
+                    Text("OpenAI").tag("openai")
+                    Text("Groq").tag("groq")
+                    
+                    // Apple Intelligence
+                    if AppleIntelligenceService.isAvailable {
+                        Text("Apple Intelligence").tag("apple-intelligence")
+                    } else {
+                        Text("Apple Intelligence (Unavailable)")
+                            .foregroundColor(.secondary)
+                            .tag("apple-intelligence-disabled")
+                    }
+                    
+                    ForEach(settings.savedProviders) { provider in
+                        Text(provider.name).tag(provider.id)
+                    }
+                }
+                .frame(width: 110)
+                .onChange(of: settings.rewriteModeSelectedProviderID) { newValue in
+                    // Prevent selecting disabled Apple Intelligence
+                    if newValue == "apple-intelligence-disabled" {
+                        settings.rewriteModeSelectedProviderID = "openai"
+                    }
+                    updateAvailableModels()
+                }
+                
+                // Model Selector (hidden for Apple Intelligence)
+                if settings.rewriteModeSelectedProviderID != "apple-intelligence" {
+                    Picker("", selection: Binding(
+                        get: { settings.rewriteModeSelectedModel ?? availableModels.first ?? "gpt-4o" },
+                        set: { settings.rewriteModeSelectedModel = $0 }
+                    )) {
+                        ForEach(availableModels, id: \.self) { model in
+                            Text(model).tag(model)
+                        }
+                    }
+                    .frame(width: 130)
+                }
+                
+                // Input field (flexible)
                 TextField(service.originalText.isEmpty 
                     ? "Ask me to write anything..." 
                     : "How should I rewrite this?", 

@@ -8,8 +8,10 @@ final class CommandModeService: ObservableObject {
     @Published var pendingCommand: PendingCommand? = nil
     @Published var currentStep: AgentStep? = nil
     @Published var streamingText: String = ""  // Real-time streaming text for UI
+    @Published private(set) var currentChatID: String?
     
     private let terminalService = TerminalService()
+    private let chatStore = ChatHistoryStore.shared
     private var currentTurnCount = 0
     private let maxTurns = 20
     
@@ -19,6 +21,26 @@ final class CommandModeService: ObservableObject {
     // Streaming UI update throttling - adaptive rate based on content length
     private var lastUIUpdate: CFAbsoluteTime = 0
     private var streamingBuffer: [String] = []  // Buffer tokens instead of string concat
+    
+    // MARK: - Initialization
+    
+    init() {
+        // Load current chat from store
+        loadCurrentChatFromStore()
+    }
+    
+    private func loadCurrentChatFromStore() {
+        if let session = chatStore.currentSession {
+            currentChatID = session.id
+            conversationHistory = session.messages.map { chatMessageToMessage($0) }
+            syncToNotchState()
+        } else {
+            // Create new chat if none exists
+            let newSession = chatStore.createNewChat()
+            currentChatID = newSession.id
+            conversationHistory = []
+        }
+    }
     
     // MARK: - Agent Step Tracking
     
@@ -86,8 +108,185 @@ final class CommandModeService: ObservableObject {
         pendingCommand = nil
         currentTurnCount = 0
         
+        // Clear in store as well
+        chatStore.clearCurrentChat()
+        
         // Also clear notch state
         NotchContentState.shared.clearCommandOutput()
+    }
+    
+    // MARK: - Chat Management
+    
+    /// Get recent chats for dropdown
+    func getRecentChats() -> [ChatSession] {
+        return chatStore.getRecentChats(excludingCurrent: false)
+    }
+    
+    /// Create a new chat and switch to it
+    func createNewChat() {
+        // Can't switch while processing
+        guard !isProcessing else { return }
+        
+        // Save current chat first
+        saveCurrentChat()
+        
+        // Create new
+        let newSession = chatStore.createNewChat()
+        currentChatID = newSession.id
+        conversationHistory = []
+        pendingCommand = nil
+        currentTurnCount = 0
+        currentStep = nil
+        
+        // Clear notch state
+        NotchContentState.shared.clearCommandOutput()
+        NotchContentState.shared.refreshRecentChats()
+    }
+    
+    /// Switch to a different chat by ID
+    /// Returns false if switching is blocked (e.g., during processing)
+    @discardableResult
+    func switchToChat(id: String) -> Bool {
+        // Can't switch while processing
+        guard !isProcessing else { return false }
+        
+        // Don't switch to current
+        guard id != currentChatID else { return true }
+        
+        // Save current chat first
+        saveCurrentChat()
+        
+        // Load the target chat
+        guard let session = chatStore.switchToChat(id: id) else { return false }
+        
+        currentChatID = session.id
+        conversationHistory = session.messages.map { chatMessageToMessage($0) }
+        pendingCommand = nil
+        currentTurnCount = 0
+        currentStep = nil
+        
+        // Sync to notch state
+        syncToNotchState()
+        NotchContentState.shared.refreshRecentChats()
+        
+        return true
+    }
+    
+    /// Delete current chat and switch to next
+    func deleteCurrentChat() {
+        // Can't delete while processing
+        guard !isProcessing else { return }
+        
+        chatStore.deleteCurrentChat()
+        
+        // Load the new current chat
+        loadCurrentChatFromStore()
+        NotchContentState.shared.refreshRecentChats()
+    }
+    
+    /// Save current conversation to store
+    func saveCurrentChat() {
+        guard let chatID = currentChatID else { return }
+        
+        let messages = conversationHistory.map { messageToChatMessage($0) }
+        chatStore.updateCurrentChat(messages: messages)
+    }
+    
+    // MARK: - Conversion Helpers
+    
+    private func messageToChatMessage(_ msg: Message) -> ChatMessage {
+        let role: ChatMessage.Role
+        switch msg.role {
+        case .user: role = .user
+        case .assistant: role = .assistant
+        case .tool: role = .tool
+        }
+        
+        let stepType: ChatMessage.StepType
+        switch msg.stepType {
+        case .normal: stepType = .normal
+        case .thinking: stepType = .thinking
+        case .checking: stepType = .checking
+        case .executing: stepType = .executing
+        case .verifying: stepType = .verifying
+        case .success: stepType = .success
+        case .failure: stepType = .failure
+        }
+        
+        var toolCall: ChatMessage.ToolCall? = nil
+        if let tc = msg.toolCall {
+            toolCall = ChatMessage.ToolCall(
+                id: tc.id,
+                command: tc.command,
+                workingDirectory: tc.workingDirectory,
+                purpose: tc.purpose
+            )
+        }
+        
+        return ChatMessage(
+            id: msg.id,
+            role: role,
+            content: msg.content,
+            toolCall: toolCall,
+            stepType: stepType,
+            timestamp: msg.timestamp
+        )
+    }
+    
+    private func chatMessageToMessage(_ chatMsg: ChatMessage) -> Message {
+        let role: Message.Role
+        switch chatMsg.role {
+        case .user: role = .user
+        case .assistant: role = .assistant
+        case .tool: role = .tool
+        }
+        
+        let stepType: Message.StepType
+        switch chatMsg.stepType {
+        case .normal: stepType = .normal
+        case .thinking: stepType = .thinking
+        case .checking: stepType = .checking
+        case .executing: stepType = .executing
+        case .verifying: stepType = .verifying
+        case .success: stepType = .success
+        case .failure: stepType = .failure
+        }
+        
+        var toolCall: Message.ToolCall? = nil
+        if let tc = chatMsg.toolCall {
+            toolCall = Message.ToolCall(
+                id: tc.id,
+                command: tc.command,
+                workingDirectory: tc.workingDirectory,
+                purpose: tc.purpose
+            )
+        }
+        
+        return Message(
+            role: role,
+            content: chatMsg.content,
+            toolCall: toolCall,
+            stepType: stepType
+        )
+    }
+    
+    /// Sync conversation history to NotchContentState
+    private func syncToNotchState() {
+        NotchContentState.shared.clearCommandOutput()
+        
+        for msg in conversationHistory {
+            let role: NotchContentState.CommandOutputMessage.Role
+            switch msg.role {
+            case .user: role = .user
+            case .assistant: role = .assistant
+            case .tool: role = .status  // Tool outputs shown as status in notch
+            }
+            
+            // Skip tool outputs in notch (they're verbose)
+            if msg.role == .tool { continue }
+            
+            NotchContentState.shared.addCommandMessage(role: role, content: msg.content)
+        }
     }
     
     /// Process user voice/text command
@@ -97,6 +296,9 @@ final class CommandModeService: ObservableObject {
         isProcessing = true
         currentTurnCount = 0
         conversationHistory.append(Message(role: .user, content: text))
+        
+        // Auto-save after adding user message
+        saveCurrentChat()
         
         // Push to notch
         if enableNotchOutput {
@@ -114,6 +316,9 @@ final class CommandModeService: ObservableObject {
         // Add to both histories
         conversationHistory.append(Message(role: .user, content: text))
         NotchContentState.shared.addCommandMessage(role: .user, content: text)
+        
+        // Auto-save after adding user message
+        saveCurrentChat()
         
         isProcessing = true
         NotchContentState.shared.setCommandProcessing(true)
@@ -154,6 +359,9 @@ final class CommandModeService: ObservableObject {
             ))
             isProcessing = false
             currentStep = .completed(false)
+            
+            // Auto-save on completion
+            saveCurrentChat()
             
             // Push to notch
             if enableNotchOutput {
@@ -236,6 +444,9 @@ final class CommandModeService: ObservableObject {
                 isProcessing = false
                 currentStep = .completed(isFinal)
                 
+                // Auto-save on completion
+                saveCurrentChat()
+                
                 // Push final response to notch and show expanded view
                 if enableNotchOutput {
                     NotchContentState.shared.updateCommandStreamingText("")  // Clear streaming
@@ -254,6 +465,9 @@ final class CommandModeService: ObservableObject {
             ))
             isProcessing = false
             currentStep = .completed(false)
+            
+            // Auto-save on error
+            saveCurrentChat()
             
             // Push error to notch
             if enableNotchOutput {
