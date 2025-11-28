@@ -13,6 +13,8 @@ struct CommandModeView: View {
     
     // UI State
     @State private var showingClearConfirmation = false
+    @State private var showHowTo = false
+    @State private var isHoveringHowTo = false
     
     @Environment(\.theme) private var theme
     
@@ -20,6 +22,9 @@ struct CommandModeView: View {
         VStack(spacing: 0) {
             // Header
             headerView
+            
+            // How To (collapsible)
+            howToSection
             
             Divider()
             
@@ -38,13 +43,9 @@ struct CommandModeView: View {
         }
         .onAppear {
             updateAvailableModels()
-            // Set overlay mode to command when this view appears
-            menuBarManager.setOverlayMode(.command)
+            // Note: Overlay mode is now set centrally by ContentView.handleModeTransition()
         }
-        .onDisappear {
-            // Reset overlay mode to dictation when leaving
-            menuBarManager.setOverlayMode(.dictation)
-        }
+        // Note: onDisappear overlay mode handling removed - now handled centrally by ContentView
         .onChange(of: asr.finalText) { newText in
             if !newText.isEmpty {
                 inputText = newText
@@ -62,9 +63,20 @@ struct CommandModeView: View {
     
     private var headerView: some View {
         HStack {
-            Text("Command Mode")
-                .font(.title2)
-                .fontWeight(.bold)
+            HStack(spacing: 8) {
+                Text("Command Mode")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                Text("Alpha")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color(red: 1.0, green: 0.35, blue: 0.35))  // Command mode red
+                    .cornerRadius(4)
+            }
             
             Spacer()
             
@@ -135,6 +147,109 @@ struct CommandModeView: View {
         }
     }
     
+    // MARK: - How To Section
+    
+    private var shortcutDisplay: String {
+        settings.commandModeHotkeyShortcut.displayString
+    }
+    
+    private var howToSection: some View {
+        VStack(spacing: 0) {
+            // Toggle button with hover effect
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showHowTo.toggle() } }) {
+                HStack {
+                    Image(systemName: "questionmark.circle")
+                        .font(.caption)
+                    Text("How to use")
+                        .font(.caption)
+                    Spacer()
+                    Image(systemName: showHowTo ? "chevron.up" : "chevron.down")
+                        .font(.caption2)
+                }
+                .foregroundStyle(isHoveringHowTo ? .primary : .secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(isHoveringHowTo ? Color.primary.opacity(0.05) : Color.clear)
+                .cornerRadius(4)
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.15)) { isHoveringHowTo = hovering }
+            }
+            
+            if showHowTo {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Start section
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Getting Started")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack(spacing: 4) {
+                            Text("Press")
+                                .font(.caption)
+                            Text(shortcutDisplay)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.primary.opacity(0.1))
+                                .cornerRadius(4)
+                            Text("to open Command Mode, speak your command, then press again to send.")
+                                .font(.caption)
+                        }
+                        .foregroundStyle(.primary.opacity(0.8))
+                    }
+                    
+                    // Examples
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Examples")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            howToItem("\"List files in my Downloads folder\"")
+                            howToItem("\"Create a folder called Projects on Desktop\"")
+                            howToItem("\"What's my IP address?\"")
+                            howToItem("\"Open Safari\"")
+                        }
+                    }
+                    
+                    // Caution note
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            Text("Caution")
+                                .fontWeight(.semibold)
+                        }
+                        .font(.caption)
+                        
+                        Text("AI can make mistakes. Avoid dangerous commands like deleting important files. Destructive actions will ask for confirmation.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+    }
+    
+    private func howToItem(_ text: String) -> some View {
+        HStack(spacing: 6) {
+            Text("•")
+                .foregroundStyle(.secondary)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.primary.opacity(0.8))
+        }
+    }
+    
     // MARK: - Chat Area
     
     private var chatArea: some View {
@@ -147,8 +262,15 @@ struct CommandModeView: View {
                     }
                     
                     if service.isProcessing {
-                        processingIndicator
-                            .id("processing")
+                        VStack(alignment: .leading, spacing: 8) {
+                            processingIndicator
+                            
+                            // Show streaming text in real-time
+                            if !service.streamingText.isEmpty {
+                                streamingTextView
+                            }
+                        }
+                        .id("processing")
                     }
                     
                     Color.clear.frame(height: 1).id("bottom")
@@ -158,12 +280,16 @@ struct CommandModeView: View {
             .onChange(of: service.conversationHistory.count) { _ in
                 scrollToBottom(proxy)
             }
-            .onChange(of: service.isProcessing) { _ in
-                scrollToBottom(proxy)
+            .onChange(of: service.isProcessing) { isProcessing in
+                // Scroll when processing starts, not on every streaming update
+                if isProcessing {
+                    scrollToBottom(proxy)
+                }
             }
             .onChange(of: service.currentStep) { _ in
                 scrollToBottom(proxy)
             }
+            // Removed: .onChange(of: service.streamingText) - causes scroll on every token, too expensive
         }
     }
     
@@ -175,6 +301,22 @@ struct CommandModeView: View {
             .padding(.vertical, 8)
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
             .cornerRadius(6)
+    }
+    
+    // MARK: - Streaming Text View (Real-time AI response)
+    
+    private var streamingTextView: some View {
+        // Use fixedSize to prevent expensive re-layout on every update
+        Text(service.streamingText)
+            .font(.system(size: 13))
+            .foregroundStyle(.primary.opacity(0.9))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: 520, alignment: .leading)
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+            .cornerRadius(8)
+            .drawingGroup()  // Flatten to bitmap for faster updates
+            // textSelection disabled during streaming - re-enabled in final message
     }
     
     private var currentStepLabel: String {

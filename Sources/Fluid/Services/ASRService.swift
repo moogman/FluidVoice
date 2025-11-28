@@ -91,7 +91,7 @@ final class ASRService: ObservableObject
     // Streaming transcription state (no VAD)
     private var streamingTask: Task<Void, Never>?
     private var lastProcessedSampleCount: Int = 0
-    private let chunkDurationSeconds: Double = 2.0  // Safer interval to prevent ANE/CoreML conflicts
+    private let chunkDurationSeconds: Double = 0.6  // Fast interval - TranscriptionExecutor actor handles CoreML serialization
     private var isProcessingChunk: Bool = false
     private var skipNextChunk: Bool = false
     private var previousFullTranscription: String = ""
@@ -767,7 +767,7 @@ final class ASRService: ObservableObject
         guard isAsrReady, let manager = asrManager else { return }
         
         let currentSampleCount = recordedPCM.count
-        let minSamples = 16000  // 1 second minimum
+        let minSamples = 8000  // 0.5 second minimum for faster initial feedback
         guard currentSampleCount >= minSamples else { return }
         
         // Copy the audio data to prevent mutation during processing
@@ -800,9 +800,10 @@ final class ASRService: ObservableObject
                 DebugLogger.shared.debug("✅ Streaming: '\(updatedText)' (\(String(format: "%.2f", duration))s)", source: "ASRService")
             }
             
-            // If transcription takes >80% of interval, skip next to prevent queue buildup
-            if duration > chunkDurationSeconds * 0.8 {
-                DebugLogger.shared.debug("⚠️ Transcription slow (\(String(format: "%.2f", duration))s), skipping next chunk", source: "ASRService")
+            // If transcription takes longer than the interval, skip next to prevent queue buildup
+            // This allows slower machines to still work without overwhelming the system
+            if duration > chunkDurationSeconds {
+                DebugLogger.shared.debug("⚠️ Transcription slow (\(String(format: "%.2f", duration))s > \(chunkDurationSeconds)s), skipping next chunk", source: "ASRService")
                 skipNextChunk = true
             }
         } catch {

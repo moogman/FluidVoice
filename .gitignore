@@ -188,6 +188,7 @@ SettingsStore.xcuserstate
 build_dev.sh
 build_and_notarize.sh
 release.sh
+check_downloads.sh
 
 
 RELEASE_NOTES_*

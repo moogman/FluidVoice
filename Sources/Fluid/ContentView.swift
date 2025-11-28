@@ -62,6 +62,7 @@ struct ContentView: View {
     @FocusState private var isTranscriptionFocused: Bool
     
     @State private var selectedSidebarItem: SidebarItem? = .welcome
+    @State private var previousSidebarItem: SidebarItem? = nil  // Track previous for mode transitions
     @State private var playgroundUsed: Bool = SettingsStore.shared.playgroundUsed
     @State private var recordingAppInfo: (name: String, bundleId: String, windowTitle: String)? = nil
     
@@ -84,8 +85,6 @@ struct ContentView: View {
     // MARK: - AI Enhancement checkbox state
     @State private var enableAIProcessing: Bool = false
     
-    // What's New Sheet
-    @State private var showWhatsNewSheet: Bool = false
     @State private var enableDebugLogs: Bool = SettingsStore.shared.enableDebugLogs
     @State private var pressAndHoldModeEnabled: Bool = SettingsStore.shared.pressAndHoldMode
     @State private var enableStreamingPreview: Bool = SettingsStore.shared.enableStreamingPreview
@@ -151,10 +150,6 @@ struct ContentView: View {
         }
         .withMouseTracking(mouseTracker)
         .environmentObject(mouseTracker)
-        .sheet(isPresented: $showWhatsNewSheet) {
-            WhatsNewView()
-                .appTheme(theme)
-        }
         .onAppear {
             appear = true
             accessibilityEnabled = checkAccessibilityPermissions()
@@ -176,6 +171,14 @@ struct ContentView: View {
             
             // Configure menu bar manager with ASR service
             menuBarManager.configure(asrService: asr)
+            
+            // Set up notch click callback for expanding command conversation
+            NotchOverlayManager.shared.onNotchClicked = { [weak commandModeService] in
+                // When notch is clicked in command mode, show expanded conversation
+                if !NotchContentState.shared.commandConversationHistory.isEmpty {
+                    NotchOverlayManager.shared.showExpandedCommandOutput()
+                }
+            }
             
             // Start polling for accessibility permission if not granted
             startAccessibilityPolling()
@@ -288,6 +291,13 @@ struct ContentView: View {
                         if event.keyCode == 53 {
                             // Escape pressed - handle cancellation
                             var handled = false
+                            
+                            // Close expanded command notch if visible (highest priority)
+                            if NotchOverlayManager.shared.isCommandOutputExpanded {
+                                DebugLogger.shared.debug("NSEvent monitor: Escape pressed, closing expanded command notch", source: "ContentView")
+                                NotchOverlayManager.shared.hideExpandedCommandOutput()
+                                handled = true
+                            }
                             
                             if asr.isRunning {
                                 DebugLogger.shared.debug("NSEvent monitor: Escape pressed, cancelling ASR recording", source: "ContentView")
@@ -490,6 +500,59 @@ struct ContentView: View {
                 DebugLogger.shared.debug("Hotkey manager initialized: \(self.hotkeyManagerInitialized)", source: "ContentView")
             }
         }
+        .onChange(of: selectedSidebarItem) { newValue in
+            handleModeTransition(from: previousSidebarItem, to: newValue)
+            previousSidebarItem = newValue
+        }
+    }
+    
+    // MARK: - Mode Transition Handler
+    /// Centralized handler for sidebar mode transitions to ensure proper cleanup and state management
+    private func handleModeTransition(from oldValue: SidebarItem?, to newValue: SidebarItem?) {
+        DebugLogger.shared.debug("Mode transition: \(String(describing: oldValue)) → \(String(describing: newValue))", source: "ContentView")
+        
+        // Clean up state from the previous mode
+        if let old = oldValue {
+            switch old {
+            case .commandMode:
+                // Close expanded command output notch if visible
+                if NotchOverlayManager.shared.isCommandOutputExpanded {
+                    DebugLogger.shared.debug("Closing expanded command notch on mode transition", source: "ContentView")
+                    NotchOverlayManager.shared.hideExpandedCommandOutput()
+                }
+                // Note: We don't clear command history here - user may want to return to it
+                
+            case .rewriteMode:
+                // Clear rewrite state when leaving
+                rewriteModeService.clearState()
+                
+            default:
+                break
+            }
+        }
+        
+        // Set up state for the new mode
+        if let new = newValue {
+            switch new {
+            case .commandMode:
+                menuBarManager.setOverlayMode(.command)
+                
+            case .rewriteMode:
+                // Check if in write mode (no original text) vs rewrite mode
+                if rewriteModeService.isWriteMode || rewriteModeService.originalText.isEmpty {
+                    menuBarManager.setOverlayMode(.write)
+                } else {
+                    menuBarManager.setOverlayMode(.rewrite)
+                }
+                
+            default:
+                // For all other views, set to dictation mode
+                menuBarManager.setOverlayMode(.dictation)
+            }
+        } else {
+            // If newValue is nil, default to dictation
+            menuBarManager.setOverlayMode(.dictation)
+        }
     }
 
     private func resetPendingShortcutState()
@@ -585,6 +648,7 @@ struct ContentView: View {
             }
             .transition(.opacity)
         }
+        .toolbar(.hidden, for: .automatic)
     }
 
     // MARK: - Welcome Guide
@@ -716,7 +780,6 @@ struct ContentView: View {
         SettingsView(
             asr: asr,
             appear: $appear,
-            showWhatsNewSheet: $showWhatsNewSheet,
             visualizerNoiseThreshold: $visualizerNoiseThreshold,
             selectedInputUID: $selectedInputUID,
             selectedOutputUID: $selectedOutputUID,
@@ -968,7 +1031,7 @@ struct ContentView: View {
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(theme.palette.primaryText)
                                 
-                                Text("Stream responses from OpenAI-compatible APIs for faster initial output")
+                                Text("Currently only Command Mode shows real-time streaming")
                                     .font(.system(size: 13))
                                     .foregroundStyle(theme.palette.secondaryText)
                             }
@@ -2411,53 +2474,43 @@ struct ContentView: View {
         }
         
         var fullContent = ""
-        var currentLine = ""
         
-        // Parse SSE line by line
-        for try await byte in bytes {
-            let char = Character(UnicodeScalar(byte))
+        // Use efficient line-based iteration instead of byte-by-byte
+        for try await rawLine in bytes.lines {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
             
-            if char == "\n" {
-                // Process the completed line
-                let line = currentLine.trimmingCharacters(in: .whitespaces)
-                
-                if line.hasPrefix("data:") {
-                    // Handle both "data: " and "data:" formats
-                    var jsonString = String(line.dropFirst(5))
-                    if jsonString.hasPrefix(" ") {
-                        jsonString = String(jsonString.dropFirst(1))
-                    }
-                    
-                    // Skip [DONE] marker
-                    if jsonString.trimmingCharacters(in: .whitespaces) == "[DONE]" {
-                        DebugLogger.shared.debug("Received [DONE] marker", source: "Streaming")
-                        currentLine = ""
-                        continue
-                    }
-                    
-                    // Parse the JSON chunk
-                    if let jsonData = jsonString.data(using: .utf8) {
-                        do {
-                            let chunk = try JSONDecoder().decode(StreamingChunk.self, from: jsonData)
-                            if let delta = chunk.choices.first?.delta,
-                               let content = delta.content {
-                                fullContent += content
-                            }
-                        } catch {
-                            // Try alternative parsing for different response formats
-                            if let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                               let choices = json["choices"] as? [[String: Any]],
-                               let firstChoice = choices.first,
-                               let delta = firstChoice["delta"] as? [String: Any],
-                               let content = delta["content"] as? String {
-                                fullContent += content
-                            }
-                        }
-                    }
+            guard line.hasPrefix("data:") else { continue }
+            
+            // Handle both "data: " and "data:" formats
+            var jsonString = String(line.dropFirst(5))
+            if jsonString.hasPrefix(" ") {
+                jsonString = String(jsonString.dropFirst(1))
+            }
+            
+            // Skip [DONE] marker
+            if jsonString.trimmingCharacters(in: .whitespaces) == "[DONE]" {
+                DebugLogger.shared.debug("Received [DONE] marker", source: "Streaming")
+                continue
+            }
+            
+            // Parse the JSON chunk
+            guard let jsonData = jsonString.data(using: .utf8) else { continue }
+            
+            do {
+                let chunk = try JSONDecoder().decode(StreamingChunk.self, from: jsonData)
+                if let delta = chunk.choices.first?.delta,
+                   let content = delta.content {
+                    fullContent += content
                 }
-                currentLine = ""
-            } else if char != "\r" {
-                currentLine.append(char)
+            } catch {
+                // Try alternative parsing for different response formats
+                if let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                   let choices = json["choices"] as? [[String: Any]],
+                   let firstChoice = choices.first,
+                   let delta = firstChoice["delta"] as? [String: Any],
+                   let content = delta["content"] as? String {
+                    fullContent += content
+                }
             }
         }
         
@@ -3154,6 +3207,13 @@ struct ContentView: View {
         // Returns true if it handled something (so GlobalHotkeyManager knows to consume the event)
         hotkeyManager?.setCancelCallback {
             var handled = false
+            
+            // Close expanded command notch if visible (highest priority)
+            if NotchOverlayManager.shared.isCommandOutputExpanded {
+                DebugLogger.shared.debug("Cancel callback: closing expanded command notch", source: "ContentView")
+                NotchOverlayManager.shared.hideExpandedCommandOutput()
+                handled = true
+            }
             
             // Reset recording mode flags
             if self.isRecordingForCommand {

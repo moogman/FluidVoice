@@ -9,6 +9,8 @@ struct RewriteModeView: View {
     
     @State private var inputText: String = ""
     @State private var showOriginal: Bool = true
+    @State private var showHowTo: Bool = false
+    @State private var isHoveringHowTo: Bool = false
     
     // Local state for available models (derived from shared AI Settings pool)
     @State private var availableModels: [String] = []
@@ -78,6 +80,9 @@ struct RewriteModeView: View {
             }
             .padding()
             .background(Color(nsColor: .windowBackgroundColor))
+            
+            // How To (collapsible)
+            howToSection
             
             Divider()
             
@@ -222,14 +227,10 @@ struct RewriteModeView: View {
             onClose?()
         }
         .onAppear {
-            // Set overlay mode to rewrite when this view appears
-            menuBarManager.setOverlayMode(.rewrite)
+            // Note: Overlay mode is now set centrally by ContentView.handleModeTransition()
             updateAvailableModels()
         }
-        .onDisappear {
-            // Reset overlay mode to dictation when leaving
-            menuBarManager.setOverlayMode(.dictation)
-        }
+        // Note: onDisappear overlay mode handling removed - now handled centrally by ContentView
     }
     
     private func toggleRecording() {
@@ -308,6 +309,109 @@ struct RewriteModeView: View {
         case "groq": return ["llama-3.3-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768"]
         case "apple-intelligence": return ["System Model"]
         default: return ["gpt-4o"]
+        }
+    }
+    
+    // MARK: - How To Section
+    
+    private var shortcutDisplay: String {
+        settings.rewriteModeHotkeyShortcut.displayString
+    }
+    
+    private var howToSection: some View {
+        VStack(spacing: 0) {
+            // Toggle button with hover effect
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showHowTo.toggle() } }) {
+                HStack {
+                    Image(systemName: "questionmark.circle")
+                        .font(.caption)
+                    Text("How to use")
+                        .font(.caption)
+                    Spacer()
+                    Image(systemName: showHowTo ? "chevron.up" : "chevron.down")
+                        .font(.caption2)
+                }
+                .foregroundStyle(isHoveringHowTo ? .primary : .secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(isHoveringHowTo ? Color.primary.opacity(0.05) : Color.clear)
+                .cornerRadius(4)
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.15)) { isHoveringHowTo = hovering }
+            }
+            
+            if showHowTo {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Write fresh
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("To Write Fresh")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack(spacing: 4) {
+                            Text("Press")
+                                .font(.caption)
+                            Text(shortcutDisplay)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.primary.opacity(0.1))
+                                .cornerRadius(4)
+                            Text("and speak what you want to write.")
+                                .font(.caption)
+                        }
+                        .foregroundStyle(.primary.opacity(0.8))
+                        
+                        howToItem("\"Write an email asking for time off\"")
+                        howToItem("\"Draft a thank you note\"")
+                    }
+                    
+                    // Rewrite
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("To Rewrite/Edit")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack(spacing: 4) {
+                            Text("Select text first, then press")
+                                .font(.caption)
+                            Text(shortcutDisplay)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.primary.opacity(0.1))
+                                .cornerRadius(4)
+                            Text("and speak your instruction.")
+                                .font(.caption)
+                        }
+                        .foregroundStyle(.primary.opacity(0.8))
+                        
+                        howToItem("\"Make this more formal\"")
+                        howToItem("\"Fix grammar and spelling\"")
+                        howToItem("\"Summarize this\"")
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+    }
+    
+    private func howToItem(_ text: String) -> some View {
+        HStack(spacing: 6) {
+            Text("•")
+                .foregroundStyle(.secondary)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.primary.opacity(0.8))
         }
     }
 }

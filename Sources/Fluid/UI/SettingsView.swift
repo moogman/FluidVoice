@@ -13,7 +13,6 @@ struct SettingsView: View {
     @ObservedObject var asr: ASRService
     @Environment(\.theme) private var theme
     @Binding var appear: Bool
-    @Binding var showWhatsNewSheet: Bool
     @Binding var visualizerNoiseThreshold: Double
     @Binding var selectedInputUID: String
     @Binding var selectedOutputUID: String
@@ -176,8 +175,10 @@ struct SettingsView: View {
                                 .buttonStyle(PremiumButtonStyle(height: 40))
                                 .buttonHoverEffect()
                                 
-                                Button("What's New") {
-                                    showWhatsNewSheet = true
+                                Button("Release Notes") {
+                                    if let url = URL(string: "https://github.com/altic-dev/Fluid-oss/releases") {
+                                        NSWorkspace.shared.open(url)
+                                    }
                                 }
                                 .buttonStyle(PremiumButtonStyle(height: 40))
                                 .buttonHoverEffect()

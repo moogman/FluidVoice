@@ -35,7 +35,6 @@ final class SettingsStore: ObservableObject
         static let copyTranscriptionToClipboard = "CopyTranscriptionToClipboard"
         static let autoUpdateCheckEnabled = "AutoUpdateCheckEnabled"
         static let lastUpdateCheckDate = "LastUpdateCheckDate"
-        static let lastSeenVersion = "LastSeenVersion"
         static let playgroundUsed = "PlaygroundUsed"
         
         // Command Mode Keys
@@ -316,13 +315,6 @@ final class SettingsStore: ObservableObject
         lastUpdateCheckDate = Date()
     }
 
-    // MARK: - What's New Tracking
-
-    var lastSeenVersion: String? {
-        get { defaults.string(forKey: Keys.lastSeenVersion) }
-        set { defaults.set(newValue, forKey: Keys.lastSeenVersion) }
-    }
-    
     var playgroundUsed: Bool {
         get { defaults.bool(forKey: Keys.playgroundUsed) }
         set { defaults.set(newValue, forKey: Keys.playgroundUsed) }
@@ -445,23 +437,6 @@ final class SettingsStore: ObservableObject
             objectWillChange.send()
             defaults.set(newValue, forKey: Keys.rewriteModeLinkedToGlobal)
         }
-    }
-
-    func shouldShowWhatsNew() -> Bool {
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-        
-        guard let lastSeen = lastSeenVersion else {
-            // First launch, don't show what's new
-            lastSeenVersion = currentVersion
-            return false
-        }
-        
-        // Show if versions are different
-        return lastSeen != currentVersion
-    }
-
-    func markWhatsNewAsSeen() {
-        lastSeenVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
     }
 
     // MARK: - Private Methods

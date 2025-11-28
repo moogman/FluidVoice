@@ -7,10 +7,18 @@ final class CommandModeService: ObservableObject {
     @Published var isProcessing = false
     @Published var pendingCommand: PendingCommand? = nil
     @Published var currentStep: AgentStep? = nil
+    @Published var streamingText: String = ""  // Real-time streaming text for UI
     
     private let terminalService = TerminalService()
     private var currentTurnCount = 0
     private let maxTurns = 20
+    
+    // Flag to enable notch output display
+    var enableNotchOutput: Bool = true
+    
+    // Streaming UI update throttling - adaptive rate based on content length
+    private var lastUIUpdate: CFAbsoluteTime = 0
+    private var streamingBuffer: [String] = []  // Buffer tokens instead of string concat
     
     // MARK: - Agent Step Tracking
     
@@ -77,6 +85,9 @@ final class CommandModeService: ObservableObject {
         conversationHistory.removeAll()
         pendingCommand = nil
         currentTurnCount = 0
+        
+        // Also clear notch state
+        NotchContentState.shared.clearCommandOutput()
     }
     
     /// Process user voice/text command
@@ -86,6 +97,26 @@ final class CommandModeService: ObservableObject {
         isProcessing = true
         currentTurnCount = 0
         conversationHistory.append(Message(role: .user, content: text))
+        
+        // Push to notch
+        if enableNotchOutput {
+            NotchContentState.shared.addCommandMessage(role: .user, content: text)
+            NotchContentState.shared.setCommandProcessing(true)
+        }
+        
+        await processNextTurn()
+    }
+    
+    /// Process follow-up command from notch input
+    func processFollowUpCommand(_ text: String) async {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        
+        // Add to both histories
+        conversationHistory.append(Message(role: .user, content: text))
+        NotchContentState.shared.addCommandMessage(role: .user, content: text)
+        
+        isProcessing = true
+        NotchContentState.shared.setCommandProcessing(true)
         
         await processNextTurn()
     }
@@ -115,18 +146,31 @@ final class CommandModeService: ObservableObject {
     
     private func processNextTurn() async {
         if currentTurnCount >= maxTurns {
+            let errorMsg = "Reached maximum steps limit. Please review the progress and continue if needed."
             conversationHistory.append(Message(
                 role: .assistant,
-                content: "Reached maximum steps limit. Please review the progress and continue if needed.",
+                content: errorMsg,
                 stepType: .failure
             ))
             isProcessing = false
             currentStep = .completed(false)
+            
+            // Push to notch
+            if enableNotchOutput {
+                NotchContentState.shared.addCommandMessage(role: .assistant, content: errorMsg)
+                NotchContentState.shared.setCommandProcessing(false)
+                showExpandedNotchIfNeeded()
+            }
             return
         }
         
         currentTurnCount += 1
         currentStep = .thinking("Analyzing...")
+        
+        // Push status to notch
+        if enableNotchOutput {
+            NotchContentState.shared.addCommandMessage(role: .status, content: "Thinking...")
+        }
         
         do {
             let response = try await callLLM()
@@ -149,6 +193,12 @@ final class CommandModeService: ObservableObject {
                     stepType: stepType
                 ))
                 
+                // Push step to notch
+                if enableNotchOutput {
+                    let statusText = tc.purpose ?? stepDescription(for: stepType)
+                    NotchContentState.shared.addCommandMessage(role: .status, content: statusText)
+                }
+                
                 // Check if we need confirmation for destructive commands
                 if SettingsStore.shared.commandModeConfirmBeforeExecute && isDestructiveCommand(tc.command) {
                     pendingCommand = PendingCommand(
@@ -159,6 +209,12 @@ final class CommandModeService: ObservableObject {
                     )
                     isProcessing = false
                     currentStep = nil
+                    
+                    // Push confirmation needed to notch
+                    if enableNotchOutput {
+                        NotchContentState.shared.addCommandMessage(role: .status, content: "⚠️ Confirmation needed in Command Mode window")
+                        NotchContentState.shared.setCommandProcessing(false)
+                    }
                     return
                 }
                 
@@ -179,17 +235,42 @@ final class CommandModeService: ObservableObject {
                 ))
                 isProcessing = false
                 currentStep = .completed(isFinal)
+                
+                // Push final response to notch and show expanded view
+                if enableNotchOutput {
+                    NotchContentState.shared.updateCommandStreamingText("")  // Clear streaming
+                    NotchContentState.shared.addCommandMessage(role: .assistant, content: response.content)
+                    NotchContentState.shared.setCommandProcessing(false)
+                    showExpandedNotchIfNeeded()
+                }
             }
             
         } catch {
+            let errorMsg = "Error: \(error.localizedDescription)"
             conversationHistory.append(Message(
                 role: .assistant,
-                content: "Error: \(error.localizedDescription)",
+                content: errorMsg,
                 stepType: .failure
             ))
             isProcessing = false
             currentStep = .completed(false)
+            
+            // Push error to notch
+            if enableNotchOutput {
+                NotchContentState.shared.addCommandMessage(role: .assistant, content: errorMsg)
+                NotchContentState.shared.setCommandProcessing(false)
+                showExpandedNotchIfNeeded()
+            }
         }
+    }
+    
+    /// Show expanded notch output if there's content to display
+    private func showExpandedNotchIfNeeded() {
+        guard enableNotchOutput else { return }
+        guard !NotchContentState.shared.commandConversationHistory.isEmpty else { return }
+        
+        // Show the expanded notch
+        NotchOverlayManager.shared.showExpandedCommandOutput()
     }
     
     private func determineStepType(for command: String, purpose: String?) -> Message.StepType {
@@ -224,9 +305,45 @@ final class CommandModeService: ObservableObject {
     }
     
     private func isDestructiveCommand(_ command: String) -> Bool {
-        let destructive = ["rm ", "rm\t", "rmdir", "mv ", "mv\t", "> ", ">> ", 
-                          "chmod ", "chown ", "kill ", "pkill ", "sudo "]
-        return destructive.contains { command.lowercased().hasPrefix($0) || command.contains(" \($0)") }
+        let cmd = command.lowercased()
+        
+        // Commands that start with these are destructive
+        let destructivePrefixes = [
+            "rm ", "rm\t", "rmdir ", "rm -", // delete
+            "mv ", "mv\t",                    // move/rename
+            "sudo ",                          // elevated privileges
+            "kill ", "pkill ", "killall ",    // terminate processes
+            "chmod ", "chown ", "chgrp ",     // change permissions/ownership
+            "dd ",                            // disk operations
+            "mkfs", "format",                 // filesystem formatting
+            "> ",                             // overwrite file
+            "truncate ",                      // truncate file
+            "shred ",                         // secure delete
+        ]
+        
+        // Check if command starts with any destructive prefix
+        if destructivePrefixes.contains(where: { cmd.hasPrefix($0) }) {
+            return true
+        }
+        
+        // Check for destructive patterns anywhere in piped commands
+        let destructivePatterns = [
+            "| rm ", "| sudo ", "| dd ",
+            "; rm ", "; sudo ",
+            "&& rm ", "&& sudo ",
+            "xargs rm", "xargs -I",
+        ]
+        
+        if destructivePatterns.contains(where: { cmd.contains($0) }) {
+            return true
+        }
+        
+        // rm with flags like -rf, -r, -f anywhere
+        if cmd.contains("rm -") {
+            return true
+        }
+        
+        return false
     }
     
     private func executeCommand(_ command: String, workingDirectory: String?, callId: String, purpose: String? = nil) async {
@@ -428,14 +545,21 @@ final class CommandModeService: ObservableObject {
         // We assume conversationHistory contains the user's latest message already
 
         
+        // Check streaming setting
+        let enableStreaming = SettingsStore.shared.enableAIStreaming
+        
         // Build request
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": model,
             "messages": messages,
             "tools": [TerminalService.toolDefinition],
             "tool_choice": "auto",
             "temperature": 0.1
         ]
+        
+        if enableStreaming {
+            body["stream"] = true
+        }
         
         let endpoint = baseURL.hasSuffix("/chat/completions") ? baseURL : "\(baseURL)/chat/completions"
         guard let url = URL(string: endpoint) else {
@@ -448,6 +572,35 @@ final class CommandModeService: ObservableObject {
         request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
+        // Retry logic for transient network errors (DNS resolution, connection cold start)
+        var lastError: Error?
+        for attempt in 1...3 {
+            do {
+                if enableStreaming {
+                    return try await processStreamingLLMResponse(request: request)
+                } else {
+                    return try await processNonStreamingLLMResponse(request: request)
+                }
+            } catch let error as URLError where error.code == .notConnectedToInternet || 
+                                                 error.code == .timedOut ||
+                                                 error.code == .networkConnectionLost ||
+                                                 error.code == .cannotFindHost ||
+                                                 error.code == .cannotConnectToHost {
+                lastError = error
+                if attempt < 3 {
+                    // Wait before retry (exponential backoff: 200ms, 400ms)
+                    try? await Task.sleep(nanoseconds: UInt64(200_000_000 * attempt))
+                    continue
+                }
+            } catch {
+                throw error  // Non-retryable error
+            }
+        }
+        throw lastError ?? NSError(domain: "CommandMode", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network request failed after retries"])
+    }
+    
+    // MARK: - Non-Streaming Response
+    private func processNonStreamingLLMResponse(request: URLRequest) async throws -> LLMResponse {
         let (data, response) = try await URLSession.shared.data(for: request)
         
         if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
@@ -462,6 +615,150 @@ final class CommandModeService: ObservableObject {
             throw NSError(domain: "CommandMode", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
         }
         
+        return parseMessageResponse(message)
+    }
+    
+    // MARK: - Streaming Response with Real-time UI Updates
+    private func processStreamingLLMResponse(request: URLRequest) async throws -> LLMResponse {
+        streamingText = ""
+        streamingBuffer = []
+        lastUIUpdate = CFAbsoluteTimeGetCurrent()
+        
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        
+        if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
+            var errorData = Data()
+            for try await byte in bytes {
+                errorData.append(byte)
+            }
+            let errText = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            throw NSError(domain: "CommandMode", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: errText])
+        }
+        
+        var toolCallId: String?
+        var toolCallName: String?
+        var toolCallArguments = ""
+        
+        // Use efficient line-based iteration instead of byte-by-byte
+        for try await rawLine in bytes.lines {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            
+            guard line.hasPrefix("data:") else { continue }
+            
+            var jsonString = String(line.dropFirst(5))
+            if jsonString.hasPrefix(" ") {
+                jsonString = String(jsonString.dropFirst(1))
+            }
+            
+            if jsonString.trimmingCharacters(in: .whitespaces) == "[DONE]" {
+                continue
+            }
+            
+            guard let jsonData = jsonString.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                  let choices = json["choices"] as? [[String: Any]],
+                  let firstChoice = choices.first,
+                  let delta = firstChoice["delta"] as? [String: Any] else {
+                continue
+            }
+            
+            // Handle text content - use buffer to avoid O(n²) string concat
+            if let content = delta["content"] as? String {
+                streamingBuffer.append(content)
+                
+                // Adaptive throttle: slower updates as content grows (reduces SwiftUI layout overhead)
+                let bufferLength = streamingBuffer.count
+                let updateInterval: CFAbsoluteTime
+                if bufferLength < 50 {
+                    updateInterval = 0.016  // 60fps for first ~50 tokens
+                } else if bufferLength < 200 {
+                    updateInterval = 0.033  // 30fps for medium content
+                } else {
+                    updateInterval = 0.066  // 15fps for long content
+                }
+                
+                let now = CFAbsoluteTimeGetCurrent()
+                if now - lastUIUpdate >= updateInterval {
+                    lastUIUpdate = now
+                    let fullContent = streamingBuffer.joined()
+                    streamingText = fullContent
+                    
+                    // Push to notch for real-time display
+                    if enableNotchOutput {
+                        NotchContentState.shared.updateCommandStreamingText(fullContent)
+                    }
+                }
+            }
+            
+            // Handle tool calls (streamed in parts)
+            if let toolCalls = delta["tool_calls"] as? [[String: Any]],
+               let toolCall = toolCalls.first {
+                
+                if let id = toolCall["id"] as? String {
+                    toolCallId = id
+                }
+                
+                if let function = toolCall["function"] as? [String: Any] {
+                    if let name = function["name"] as? String {
+                        toolCallName = name
+                    }
+                    if let args = function["arguments"] as? String {
+                        toolCallArguments += args
+                    }
+                }
+            }
+        }
+        
+        // Final update - join buffer once at the end
+        let fullContent = streamingBuffer.joined()
+        if !fullContent.isEmpty {
+            streamingText = fullContent
+            if enableNotchOutput {
+                NotchContentState.shared.updateCommandStreamingText(fullContent)
+            }
+        }
+        
+        // Small delay to let the final content render, then clear
+        try? await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+        
+        streamingText = ""  // Clear streaming text when done
+        streamingBuffer = []  // Clear buffer
+        
+        // Clear notch streaming text as well
+        if enableNotchOutput {
+            NotchContentState.shared.updateCommandStreamingText("")
+        }
+        
+        // If we got a tool call, parse it
+        if let name = toolCallName, name == "execute_terminal_command",
+           let argsData = toolCallArguments.data(using: .utf8),
+           let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
+            
+            let command = args["command"] as? String ?? ""
+            let workDir = args["workingDirectory"] as? String
+            let purpose = args["purpose"] as? String
+            let callId = toolCallId ?? "call_\(UUID().uuidString.prefix(8))"
+            
+            return LLMResponse(
+                content: fullContent,
+                toolCall: LLMResponse.ToolCallData(
+                    id: callId,
+                    command: command,
+                    workingDirectory: workDir?.isEmpty == true ? nil : workDir,
+                    purpose: purpose
+                )
+            )
+        }
+        
+        // Text response only
+        return LLMResponse(
+            content: fullContent.isEmpty ? "I couldn't understand that." : fullContent,
+            toolCall: nil
+        )
+    }
+    
+    // MARK: - Parse Message Helper
+    private func parseMessageResponse(_ message: [String: Any]) -> LLMResponse {
         // Check for tool calls
         if let toolCalls = message["tool_calls"] as? [[String: Any]],
            let toolCall = toolCalls.first,

@@ -11,6 +11,7 @@ import AVFoundation
 
 struct WelcomeView: View {
     @ObservedObject var asr: ASRService
+    @ObservedObject private var settings = SettingsStore.shared
     @Binding var selectedSidebarItem: SidebarItem?
     @Binding var playgroundUsed: Bool
     var isTranscriptionFocused: FocusState<Bool>.Binding
@@ -27,6 +28,14 @@ struct WelcomeView: View {
     let startRecording: () -> Void
     let isLocalEndpoint: (String) -> Bool
     let openAccessibilitySettings: () -> Void
+    
+    private var commandModeShortcutDisplay: String {
+        settings.commandModeHotkeyShortcut.displayString
+    }
+    
+    private var writeModeShortcutDisplay: String {
+        settings.rewriteModeHotkeyShortcut.displayString
+    }
     
     var body: some View {
         ScrollView {
@@ -162,21 +171,21 @@ struct WelcomeView: View {
                                 .font(.system(size: 15, weight: .semibold))
                         }
 
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 12) {
                             HStack(alignment: .top, spacing: 10) {
                                 ZStack {
                                     Circle()
                                         .fill(theme.palette.accent.opacity(0.15))
-                                        .frame(width: 28, height: 28)
+                                        .frame(width: 32, height: 32)
                                     Text("1")
-                                        .font(.system(size: 13, weight: .bold))
+                                        .font(.system(size: 14, weight: .bold))
                                         .foregroundStyle(theme.palette.accent)
                                 }
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: 4) {
                                     Text("Start Recording")
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(.system(size: 15, weight: .semibold))
                                     Text("Press your hotkey (default: Right Option/Alt) or click the button")
-                                        .font(.system(size: 12))
+                                        .font(.system(size: 13))
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -185,16 +194,16 @@ struct WelcomeView: View {
                                 ZStack {
                                     Circle()
                                         .fill(theme.palette.accent.opacity(0.15))
-                                        .frame(width: 28, height: 28)
+                                        .frame(width: 32, height: 32)
                                     Text("2")
-                                        .font(.system(size: 13, weight: .bold))
+                                        .font(.system(size: 14, weight: .bold))
                                         .foregroundStyle(theme.palette.accent)
                                 }
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: 4) {
                                     Text("Speak Clearly")
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(.system(size: 15, weight: .semibold))
                                     Text("Speak naturally - works best in quiet environments")
-                                        .font(.system(size: 12))
+                                        .font(.system(size: 13))
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -203,23 +212,199 @@ struct WelcomeView: View {
                                 ZStack {
                                     Circle()
                                         .fill(theme.palette.accent.opacity(0.15))
-                                        .frame(width: 28, height: 28)
+                                        .frame(width: 32, height: 32)
                                     Text("3")
-                                        .font(.system(size: 13, weight: .bold))
+                                        .font(.system(size: 14, weight: .bold))
                                         .foregroundStyle(theme.palette.accent)
                                 }
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: 4) {
                                     Text("Auto-Type Result")
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(.system(size: 15, weight: .semibold))
                                     Text("Transcription is automatically typed into your focused app")
-                                        .font(.system(size: 12))
+                                        .font(.system(size: 13))
                                         .foregroundStyle(.secondary)
                                 }
                             }
                         }
+                        .padding(.vertical, 8)
                     }
                     .padding(14)
                 }
+                .frame(maxWidth: .infinity)
+
+                // Command Mode
+                ThemedCard(style: .standard) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Image(systemName: "terminal.fill")
+                                .font(.system(size: 16))
+                                .foregroundStyle(Color(red: 1.0, green: 0.35, blue: 0.35))  // Command mode red
+                            Text("Command Mode")
+                                .font(.system(size: 15, weight: .semibold))
+                            
+                            Text("New")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color(red: 1.0, green: 0.35, blue: 0.35))  // Command mode red
+                                .cornerRadius(4)
+                            
+                            Text("Alpha")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color(red: 1.0, green: 0.35, blue: 0.35).opacity(0.7))  // Command mode red
+                                .cornerRadius(4)
+                            
+                            Spacer()
+                            
+                            Button(action: { selectedSidebarItem = .commandMode }) {
+                                Text("Open")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+
+                        Text("Control your Mac with voice commands. Execute terminal commands, open apps, and more.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+
+                        // How to use
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Getting Started")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.orange)
+                            
+                            HStack(spacing: 4) {
+                                Text("Press")
+                                    .font(.system(size: 12))
+                                Text(commandModeShortcutDisplay)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.primary.opacity(0.1))
+                                    .cornerRadius(4)
+                                Text("to open, speak your command, then press again to send.")
+                                    .font(.system(size: 12))
+                            }
+                            .foregroundStyle(.primary.opacity(0.8))
+                        }
+                        .padding(.vertical, 4)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Examples")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.orange)
+                            commandModeExample(icon: "folder", text: "\"List files in my Downloads folder\"")
+                            commandModeExample(icon: "plus.rectangle.on.folder", text: "\"Create a folder called Projects on Desktop\"")
+                            commandModeExample(icon: "network", text: "\"What's my IP address?\"")
+                            commandModeExample(icon: "safari", text: "\"Open Safari\"")
+                        }
+
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.orange)
+                            Text("AI can make mistakes. Avoid destructive commands.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.top, 4)
+                    }
+                    .padding(14)
+                }
+                .frame(maxWidth: .infinity)
+
+                // Write Mode
+                ThemedCard(style: .standard) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Image(systemName: "pencil.and.outline")
+                                .font(.system(size: 16))
+                                .foregroundStyle(.blue)
+                            Text("Write Mode")
+                                .font(.system(size: 15, weight: .semibold))
+                            
+                            Text("New")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.blue)
+                                .cornerRadius(4)
+                            
+                            Spacer()
+                            
+                            Button(action: { selectedSidebarItem = .rewriteMode }) {
+                                Text("Open")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+
+                        Text("AI-powered writing assistant. Write fresh content or rewrite selected text with voice.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Write Fresh section
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("To Write Fresh")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.blue)
+                                
+                                HStack(spacing: 4) {
+                                    Text("Press")
+                                        .font(.system(size: 12))
+                                    Text(writeModeShortcutDisplay)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.primary.opacity(0.1))
+                                        .cornerRadius(4)
+                                    Text("and speak what you want to write.")
+                                        .font(.system(size: 12))
+                                }
+                                .foregroundStyle(.primary.opacity(0.8))
+                                
+                                writeModeExample(text: "\"Write an email asking for time off\"")
+                                writeModeExample(text: "\"Draft a thank you note\"")
+                            }
+                            
+                            // Rewrite/Edit section
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("To Rewrite/Edit")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.blue)
+                                
+                                HStack(spacing: 4) {
+                                    Text("Select text first, then press")
+                                        .font(.system(size: 12))
+                                    Text(writeModeShortcutDisplay)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.primary.opacity(0.1))
+                                        .cornerRadius(4)
+                                    Text("and speak your instruction.")
+                                        .font(.system(size: 12))
+                                }
+                                .foregroundStyle(.primary.opacity(0.8))
+                                
+                                writeModeExample(text: "\"Make this more formal\"")
+                                writeModeExample(text: "\"Fix grammar and spelling\"")
+                                writeModeExample(text: "\"Summarize this\"")
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .padding(14)
+                }
+                .frame(maxWidth: .infinity)
 
                 // Test Playground - At the end
                 ThemedCard(hoverEffect: false) {
@@ -425,6 +610,30 @@ struct WelcomeView: View {
 
             }
             .padding(16)
+        }
+    }
+    
+    // MARK: - Helper Views
+    
+    private func commandModeExample(icon: String, text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .foregroundStyle(.orange.opacity(0.8))
+                .frame(width: 16)
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundStyle(.primary.opacity(0.8))
+        }
+    }
+    
+    private func writeModeExample(text: String) -> some View {
+        HStack(spacing: 6) {
+            Text("•")
+                .foregroundStyle(.blue.opacity(0.6))
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundStyle(.primary.opacity(0.8))
         }
     }
 }

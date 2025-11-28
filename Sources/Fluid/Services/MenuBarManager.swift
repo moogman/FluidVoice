@@ -30,6 +30,9 @@ final class MenuBarManager: ObservableObject {
     private var pendingShowOperation: DispatchWorkItem?
     private var pendingHideOperation: DispatchWorkItem?
     
+    // Subscription for forwarding audio levels to expanded command notch
+    private var expandedModeAudioSubscription: AnyCancellable?
+    
     init() {
         // Don't setup menu bar immediately - defer until app is ready
         // Initialize from persisted setting
@@ -97,8 +100,38 @@ final class MenuBarManager: ObservableObject {
             
             overlayVisible = true
             
+            // If expanded command output is showing, check if we should keep it or close it
+            if NotchOverlayManager.shared.isCommandOutputExpanded {
+                // Only keep expanded notch if this is a command mode recording (follow-up)
+                // For other modes (dictation, rewrite), close it and show regular notch
+                if currentOverlayMode == .command {
+                    // Enable recording visualization in the expanded notch
+                    NotchContentState.shared.setRecordingInExpandedMode(true)
+                    
+                    // Subscribe to audio levels and forward to expanded notch
+                    expandedModeAudioSubscription = asrService.audioLevelPublisher
+                        .receive(on: DispatchQueue.main)
+                        .sink { level in
+                            NotchContentState.shared.updateExpandedModeAudioLevel(level)
+                        }
+                    
+                    pendingShowOperation = nil
+                    return
+                } else {
+                    // Close expanded command notch to transition to regular notch
+                    NotchOverlayManager.shared.hideExpandedCommandOutput()
+                }
+            }
+            
             let showItem = DispatchWorkItem { [weak self] in
                 guard let self = self, self.overlayVisible else { return }
+                
+                // Double-check expanded notch isn't showing (could have changed during delay)
+                // But only block if we're in command mode
+                if NotchOverlayManager.shared.isCommandOutputExpanded && self.currentOverlayMode == .command {
+                    self.pendingShowOperation = nil
+                    return
+                }
                 
                 // Show notch overlay
                 NotchOverlayManager.shared.show(
@@ -117,8 +150,25 @@ final class MenuBarManager: ObservableObject {
             
             overlayVisible = false
             
+            // If expanded command output is showing, don't hide it - let it stay visible
+            if NotchOverlayManager.shared.isCommandOutputExpanded {
+                // Stop recording visualization in expanded notch
+                NotchContentState.shared.setRecordingInExpandedMode(false)
+                expandedModeAudioSubscription?.cancel()
+                expandedModeAudioSubscription = nil
+                
+                pendingHideOperation = nil
+                return
+            }
+            
             let hideItem = DispatchWorkItem { [weak self] in
                 guard let self = self, !self.overlayVisible else { return }
+                
+                // Don't hide if expanded command output is now showing
+                if NotchOverlayManager.shared.isCommandOutputExpanded {
+                    self.pendingHideOperation = nil
+                    return
+                }
                 
                 // Hide notch overlay
                 NotchOverlayManager.shared.hide()
@@ -147,10 +197,25 @@ final class MenuBarManager: ObservableObject {
             pendingHideOperation = nil
             overlayVisible = true
         } else {
-            // When processing ends, schedule the hide
+            // When processing ends, schedule the hide (unless expanded output is showing)
             overlayVisible = false
+            
+            // If expanded command output is showing, don't hide it
+            if NotchOverlayManager.shared.isCommandOutputExpanded {
+                pendingHideOperation = nil
+                NotchOverlayManager.shared.setProcessing(processing)
+                return
+            }
+            
             let hideItem = DispatchWorkItem { [weak self] in
                 guard let self = self, !self.overlayVisible else { return }
+                
+                // Don't hide if expanded command output is now showing
+                if NotchOverlayManager.shared.isCommandOutputExpanded {
+                    self.pendingHideOperation = nil
+                    return
+                }
+                
                 NotchOverlayManager.shared.hide()
                 self.pendingHideOperation = nil
             }
@@ -280,13 +345,6 @@ final class MenuBarManager: ObservableObject {
         openItem.target = self
         menu.addItem(openItem)
         
-        // Show What's New (for testing)
-        #if DEBUG
-        let whatsNewItem = NSMenuItem(title: "Show What's New", action: #selector(showWhatsNew), keyEquivalent: "")
-        whatsNewItem.target = self
-        menu.addItem(whatsNewItem)
-        #endif
-        
         // Check for Updates
         let updateItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates(_:)), keyEquivalent: "")
         updateItem.target = self
@@ -366,11 +424,6 @@ final class MenuBarManager: ObservableObject {
                 msg.runModal()
             }
         }
-    }
-    
-    @objc private func showWhatsNew() {
-        // Post notification to show What's New view
-        NotificationCenter.default.post(name: NSNotification.Name("ShowWhatsNew"), object: nil)
     }
     
     @objc private func openMainWindow() {

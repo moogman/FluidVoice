@@ -187,6 +187,7 @@ final class RewriteModeService: ObservableObject {
         ]
         
         if enableStreaming {
+            // TODO: Streamed text is still buffered; add incremental UI updates so write mode visibly streams.
             body["stream"] = true
         }
         
@@ -238,37 +239,31 @@ final class RewriteModeService: ObservableObject {
         }
         
         var fullContent = ""
-        var currentLine = ""
         
-        for try await byte in bytes {
-            let char = Character(UnicodeScalar(byte))
+        // Use efficient line-based iteration instead of byte-by-byte
+        for try await rawLine in bytes.lines {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
             
-            if char == "\n" {
-                let line = currentLine.trimmingCharacters(in: .whitespaces)
-                
-                if line.hasPrefix("data:") {
-                    var jsonString = String(line.dropFirst(5))
-                    if jsonString.hasPrefix(" ") {
-                        jsonString = String(jsonString.dropFirst(1))
-                    }
-                    
-                    if jsonString.trimmingCharacters(in: .whitespaces) == "[DONE]" {
-                        currentLine = ""
-                        continue
-                    }
-                    
-                    if let jsonData = jsonString.data(using: .utf8),
-                       let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                       let choices = json["choices"] as? [[String: Any]],
-                       let firstChoice = choices.first,
-                       let delta = firstChoice["delta"] as? [String: Any],
-                       let content = delta["content"] as? String {
-                        fullContent += content
-                    }
-                }
-                currentLine = ""
-            } else if char != "\r" {
-                currentLine.append(char)
+            guard line.hasPrefix("data:") else { continue }
+            
+            var jsonString = String(line.dropFirst(5))
+            if jsonString.hasPrefix(" ") {
+                jsonString = String(jsonString.dropFirst(1))
+            }
+            
+            if jsonString.trimmingCharacters(in: .whitespaces) == "[DONE]" {
+                continue
+            }
+            
+            if let jsonData = jsonString.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+               let choices = json["choices"] as? [[String: Any]],
+               let firstChoice = choices.first,
+               let delta = firstChoice["delta"] as? [String: Any],
+               let content = delta["content"] as? String {
+                fullContent += content
+                // Update UI in real-time for streaming feedback
+                rewrittenText = fullContent
             }
         }
         
