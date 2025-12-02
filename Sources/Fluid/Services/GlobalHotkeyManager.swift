@@ -1,10 +1,11 @@
 import Foundation
 import AppKit
 
+@MainActor
 final class GlobalHotkeyManager: NSObject
 {
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    nonisolated(unsafe) private var eventTap: CFMachPort?
+    nonisolated(unsafe) private var runLoopSource: CFRunLoopSource?
     private let asrService: ASRService
     private var shortcut: HotkeyShortcut
     private var commandModeShortcut: HotkeyShortcut
@@ -115,9 +116,9 @@ final class GlobalHotkeyManager: NSObject
             }
             
             if attempt < maxRetryAttempts {
-                DebugLogger.shared.warning("Attempt \(attempt) failed, retrying in \(retryDelay) seconds...", source: "GlobalHotkeyManager")
+                DebugLogger.shared.warning("Attempt \(attempt) failed, retrying in \(self.retryDelay) seconds...", source: "GlobalHotkeyManager")
                 Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: UInt64(retryDelay * 1_000_000_000))
+                    try? await Task.sleep(nanoseconds: UInt64((self?.retryDelay ?? 0.5) * 1_000_000_000))
                     await MainActor.run { [weak self] in
                         self?.setupGlobalHotkeyWithRetry()
                     }
@@ -190,7 +191,7 @@ final class GlobalHotkeyManager: NSObject
         return true
     }
     
-    private func cleanupEventTap() {
+    nonisolated private func cleanupEventTap() {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
