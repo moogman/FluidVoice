@@ -11,6 +11,7 @@ import AVFoundation
 import Combine
 import CoreAudio
 import CoreGraphics
+import Security
 
 // MARK: - Sidebar Item Enum
 
@@ -132,6 +133,8 @@ struct ContentView: View {
     @State private var newProviderBaseURL: String = ""
     @State private var keyJustSaved: Bool = false
     @State private var showAPIKeysGuide: Bool = false
+    @State private var showKeychainPermissionAlert: Bool = false
+    @State private var keychainPermissionMessage: String = ""
     
     // Feedback State
     @State private var feedbackText: String = ""
@@ -467,6 +470,16 @@ struct ContentView: View {
             }
         }
         .overlay(alignment: .center) {
+        }
+        .alert("Keychain Access Required", isPresented: $showKeychainPermissionAlert) {
+            Button("Open Keychain Access") {
+                openKeychainAccessApp()
+            }
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(keychainPermissionMessage.isEmpty
+                 ? "FluidVoice stores provider API keys securely in your macOS Keychain. Please grant access by choosing \"Always Allow\" when prompted."
+                 : keychainPermissionMessage)
         }
         .onReceive(audioObserver.changePublisher) { _ in
             // Hardware change detected → refresh lists and apply preferences if available
@@ -1400,8 +1413,7 @@ struct ContentView: View {
                             Divider()
                             
                             Button(action: {
-                                newProviderApiKey = providerAPIKeys[currentProvider] ?? ""
-                                showAPIKeyEditor = true
+                                handleAPIKeyButtonTapped()
                             }) {
                                 Label("Add or Modify API Key", systemImage: "key.fill")
                                     .labelStyle(.titleAndIcon)
@@ -1586,7 +1598,7 @@ struct ContentView: View {
                         Color.clear.frame(height: 0)
                             .sheet(isPresented: $showAPIKeyEditor) {
                             VStack(spacing: 14) {
-                                Text("Enter \(currentProvider.capitalized) API Key")
+                            Text("Enter \(providerDisplayName(for: selectedProviderID)) API Key")
                                     .font(.headline)
 
                                 SecureField("API Key (optional for local endpoints)", text: $newProviderApiKey)
@@ -2084,6 +2096,16 @@ struct ContentView: View {
         // Saved providers use their stable id
         return providerID.isEmpty ? currentProvider : "custom:\(providerID)"
     }
+    
+    private func providerDisplayName(for providerID: String) -> String {
+        switch providerID {
+        case "openai": return "OpenAI"
+        case "groq": return "Groq"
+        case "apple-intelligence": return "Apple Intelligence"
+        default:
+            return savedProviders.first(where: { $0.id == providerID })?.name ?? providerID.capitalized
+        }
+    }
 
     private func defaultModels(for providerKey: String) -> [String] {
         switch providerKey {
@@ -2095,6 +2117,81 @@ struct ContentView: View {
 
     private func saveProviderAPIKeys() {
         SettingsStore.shared.providerAPIKeys = providerAPIKeys
+    }
+    
+    // MARK: - Keychain Access Helpers
+    private enum KeychainAccessCheckResult {
+        case granted
+        case denied(OSStatus)
+    }
+    
+    private func handleAPIKeyButtonTapped() {
+        switch probeKeychainAccess() {
+        case .granted:
+            newProviderApiKey = providerAPIKeys[currentProvider] ?? ""
+            showAPIKeyEditor = true
+        case .denied(let status):
+            keychainPermissionMessage = keychainPermissionExplanation(for: status)
+            showKeychainPermissionAlert = true
+        }
+    }
+    
+    private func probeKeychainAccess() -> KeychainAccessCheckResult {
+        let service = "com.fluidvoice.provider-api-keys"
+        let account = "fluidApiKeys"
+        
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        
+        var readQuery = query
+        readQuery[kSecReturnData as String] = kCFBooleanTrue
+        readQuery[kSecMatchLimit as String] = kSecMatchLimitOne
+        
+        let readStatus = SecItemCopyMatching(readQuery as CFDictionary, nil)
+        switch readStatus {
+        case errSecSuccess:
+            return .granted
+        case errSecItemNotFound:
+            var addQuery = query
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            addQuery[kSecValueData as String] = (try? JSONEncoder().encode([String: String]())) ?? Data()
+            
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            if addStatus == errSecSuccess {
+                SecItemDelete(query as CFDictionary)
+            }
+            
+            switch addStatus {
+            case errSecSuccess, errSecDuplicateItem:
+                return .granted
+            case errSecAuthFailed, errSecInteractionNotAllowed, errSecUserCanceled:
+                return .denied(addStatus)
+            default:
+                DebugLogger.shared.warning("Keychain access probe failed with status \(addStatus)", source: "ContentView")
+                return .denied(addStatus)
+            }
+        case errSecAuthFailed, errSecInteractionNotAllowed, errSecUserCanceled:
+            return .denied(readStatus)
+        default:
+            DebugLogger.shared.warning("Keychain access probe failed with status \(readStatus)", source: "ContentView")
+            return .denied(readStatus)
+        }
+    }
+    
+    private func keychainPermissionExplanation(for status: OSStatus) -> String {
+        var message = "FluidVoice stores provider API keys securely in your macOS Keychain but does not currently have permission to access it."
+        if let detail = SecCopyErrorMessageString(status, nil) as String? {
+            message += "\n\nmacOS reported: \(detail) (\(status))"
+        }
+        message += "\n\nClick \"Always Allow\" when the Keychain prompt appears, or open Keychain Access > login > Passwords, locate the FluidVoice entry, and grant access."
+        return message
+    }
+    
+    private func openKeychainAccessApp() {
+        NSWorkspace.shared.launchApplication("Keychain Access")
     }
     
     private func updateCurrentProvider() {
