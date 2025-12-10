@@ -142,6 +142,11 @@ struct ContentView: View {
     @State private var showKeychainPermissionAlert: Bool = false
     @State private var keychainPermissionMessage: String = ""
     
+    // Edit Provider State
+    @State private var showingEditProvider: Bool = false
+    @State private var editProviderName: String = ""
+    @State private var editProviderBaseURL: String = ""
+    
     // Feedback State
     @State private var feedbackText: String = ""
     @State private var feedbackEmail: String = ""
@@ -1343,7 +1348,25 @@ struct ContentView: View {
                                 }
                             }
                             
-                            // Always show delete button
+                            // Edit button for custom providers
+                            Button(action: {
+                                if let provider = savedProviders.first(where: { $0.id == selectedProviderID }) {
+                                    editProviderName = provider.name
+                                    editProviderBaseURL = provider.baseURL
+                                    showingEditProvider = true
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "pencil")
+                                    Text("Edit")
+                                }
+                                .font(.caption)
+                            }
+                            .buttonStyle(CompactButtonStyle())
+                            .buttonHoverEffect()
+                            .disabled(selectedProviderID == "openai" || selectedProviderID == "groq" || selectedProviderID == "apple-intelligence")
+                            
+                            // Delete button for custom providers
                             Button(action: {
                                 // Only delete if it's a custom provider
                                 if !selectedProviderID.isEmpty && selectedProviderID != "openai" && selectedProviderID != "groq" {
@@ -1385,6 +1408,79 @@ struct ContentView: View {
                             .buttonHoverEffect()
                         }
                         
+                        // Edit Provider Modal (Inline)
+                        if showingEditProvider {
+                            VStack(spacing: 12) {
+                                HStack {
+                                    Text("Edit Provider")
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                    Spacer()
+                                }
+                                
+                                HStack(spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Name")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        TextField("Provider name", text: $editProviderName)
+                                            .textFieldStyle(.roundedBorder)
+                                            .frame(width: 200)
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Base URL")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        TextField("e.g., http://localhost:11434/v1", text: $editProviderBaseURL)
+                                            .textFieldStyle(.roundedBorder)
+                                            .font(.system(.body, design: .monospaced))
+                                    }
+                                }
+
+                                HStack(spacing: 8) {
+                                    Button("Save") {
+                                        let name = editProviderName.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        let base = editProviderBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        
+                                        guard !name.isEmpty, !base.isEmpty else { return }
+                                        
+                                        if let providerIndex = savedProviders.firstIndex(where: { $0.id == selectedProviderID }) {
+                                            let oldProvider = savedProviders[providerIndex]
+                                            let updatedProvider = SettingsStore.SavedProvider(
+                                                id: oldProvider.id,
+                                                name: name,
+                                                baseURL: base,
+                                                models: oldProvider.models
+                                            )
+                                            savedProviders[providerIndex] = updatedProvider
+                                            saveSavedProviders()
+                                            
+                                            openAIBaseURL = base
+                                            updateCurrentProvider()
+                                        }
+                                        
+                                        showingEditProvider = false
+                                        editProviderName = ""; editProviderBaseURL = ""
+                                    }
+                                    .buttonStyle(GlassButtonStyle())
+                                    .disabled(editProviderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || editProviderBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                                    Button("Cancel") {
+                                        showingEditProvider = false
+                                        editProviderName = ""; editProviderBaseURL = ""
+                                    }
+                                    .buttonStyle(GlassButtonStyle())
+                                }
+                            }
+                            .padding(12)
+                            .background(theme.palette.cardBackground.opacity(0.5))
+                            .cornerRadius(12)
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.palette.accent.opacity(0.3), lineWidth: 1))
+                            .padding(.vertical, 8)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+
                         // Apple Intelligence Badge (when selected)
                         if selectedProviderID == "apple-intelligence" {
                             HStack(spacing: 8) {
@@ -1415,33 +1511,7 @@ struct ContentView: View {
                             Divider()
                         }
                         
-                        // Base URL (for custom providers, not for Apple Intelligence)
-                        if !["openai", "groq", "apple-intelligence"].contains(selectedProviderID) {
-                            HStack(spacing: 12) {
-                                HStack {
-                                    Text("Base URL:")
-                                        .fontWeight(.medium)
-                                }
-                                .frame(width: 90, alignment: .leading)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(
-                                    LinearGradient(
-                                        colors: [theme.palette.accent.opacity(0.15), theme.palette.accent.opacity(0.05)],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .cornerRadius(6)
-                                
-                                TextField("e.g., http://localhost:11434/v1", text: $openAIBaseURL)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(.body, design: .monospaced))
-                                    .onChange(of: openAIBaseURL) { _ in
-                                        updateCurrentProvider()
-                                    }
-                            }
-                        }
+
                         
                         // API Key Management (not for Apple Intelligence)
                         if selectedProviderID != "apple-intelligence" {
@@ -1988,7 +2058,7 @@ struct ContentView: View {
                                         showingSaveProvider = false
                                         newProviderName = ""; newProviderBaseURL = ""; newProviderApiKey = ""; newProviderModels = ""
                                     }
-                                    .buttonStyle(GlassButtonStyle())
+                            .buttonStyle(GlassButtonStyle())
                                     .buttonHoverEffect()
                                 }
                             }
