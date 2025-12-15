@@ -189,22 +189,19 @@ struct ContentView: View {
                 if selectedInputUID.isEmpty, let defIn = AudioDevice.getDefaultInputDevice()?.uid { selectedInputUID = defIn }
                 if selectedOutputUID.isEmpty, let defOut = AudioDevice.getDefaultOutputDevice()?.uid { selectedOutputUID = defOut }
                 
-                // Apply saved preferences if present and available
+                // Load saved preferences for UI display (but don't force system defaults)
+                // FluidVoice should NOT control system-wide audio routing
                 if let prefIn = SettingsStore.shared.preferredInputDeviceUID,
                    prefIn.isEmpty == false,
-                   inputDevices.first(where: { $0.uid == prefIn }) != nil,
-                   prefIn != AudioDevice.getDefaultInputDevice()?.uid
+                   inputDevices.first(where: { $0.uid == prefIn }) != nil
                 {
-                    _ = AudioDevice.setDefaultInputDevice(uid: prefIn)
                     selectedInputUID = prefIn
                 }
                 
                 if let prefOut = SettingsStore.shared.preferredOutputDeviceUID,
                    prefOut.isEmpty == false,
-                   outputDevices.first(where: { $0.uid == prefOut }) != nil,
-                   prefOut != AudioDevice.getDefaultOutputDevice()?.uid
+                   outputDevices.first(where: { $0.uid == prefOut }) != nil
                 {
-                    _ = AudioDevice.setDefaultOutputDevice(uid: prefOut)
                     selectedOutputUID = prefOut
                 }
                 
@@ -488,34 +485,17 @@ struct ContentView: View {
             Text(asr.errorMessage)
         }
         .onChange(of: audioObserver.changeTick) { _, _ in
-            // Hardware change detected → refresh lists and apply preferences if available
+            // Hardware change detected → refresh device lists only
+            // NOTE: We do NOT force system defaults here anymore.
+            // FluidVoice should not hijack system-wide audio routing.
+            // The saved preferences are only used when FluidVoice actively records.
             refreshDevices()
 
-            // Input: prefer saved device if present, else mirror system default
-            if let prefIn = SettingsStore.shared.preferredInputDeviceUID,
-               prefIn.isEmpty == false,
-               inputDevices.first(where: { $0.uid == prefIn }) != nil,
-               prefIn != AudioDevice.getDefaultInputDevice()?.uid
-            {
-                _ = AudioDevice.setDefaultInputDevice(uid: prefIn)
-                selectedInputUID = prefIn
-            }
-            else if let sysIn = AudioDevice.getDefaultInputDevice()?.uid
-            {
+            // Just sync the UI to show current system defaults (don't force them)
+            if let sysIn = AudioDevice.getDefaultInputDevice()?.uid {
                 selectedInputUID = sysIn
             }
-
-            // Output: prefer saved device if present, else mirror system default
-            if let prefOut = SettingsStore.shared.preferredOutputDeviceUID,
-               prefOut.isEmpty == false,
-               outputDevices.first(where: { $0.uid == prefOut }) != nil,
-               prefOut != AudioDevice.getDefaultOutputDevice()?.uid
-            {
-                _ = AudioDevice.setDefaultOutputDevice(uid: prefOut)
-                selectedOutputUID = prefOut
-            }
-            else if let sysOut = AudioDevice.getDefaultOutputDevice()?.uid
-            {
+            if let sysOut = AudioDevice.getDefaultOutputDevice()?.uid {
                 selectedOutputUID = sysOut
             }
         }
