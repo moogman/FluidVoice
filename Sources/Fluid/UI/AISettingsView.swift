@@ -235,7 +235,7 @@ struct AISettingsView: View {
                             .font(.caption)
                         Text(SettingsStore.shared.selectedSpeechModel.isWhisperModel
                              ? "Whisper models support 99 languages and work on any Mac."
-                             : "Parakeet TDT uses CoreML and Neural Engine for fastest English transcription on Apple Silicon.")
+                             : "Parakeet TDT uses CoreML and Neural Engine for fastest transcription (25 languages) on Apple Silicon.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

@@ -801,7 +801,7 @@ final class SettingsStore: ObservableObject
         
         var languageSupport: String {
             switch self {
-            case .parakeetTDT: return "English"
+            case .parakeetTDT: return "25 Languages"
             case .whisperTiny, .whisperBase, .whisperSmall, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
                 return "99 Languages"
             }

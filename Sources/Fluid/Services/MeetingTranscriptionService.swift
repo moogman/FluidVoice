@@ -6,7 +6,7 @@ import FluidAudio
 import Combine
 
 /// Result of a transcription operation
-nonisolated struct TranscriptionResult: Identifiable, Sendable, Codable {
+struct TranscriptionResult: Identifiable, Sendable, Codable {
     let id = UUID()
     let text: String
     let confidence: Float

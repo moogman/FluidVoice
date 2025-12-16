@@ -1228,15 +1228,24 @@ struct ContentView: View {
         // Get streaming setting
         let enableStreaming = SettingsStore.shared.enableAIStreaming
         
+        // Check if this is a reasoning model that doesn't support temperature parameter
+        let modelLower = derivedSelectedModel.lowercased()
+        let isReasoningModel = modelLower.hasPrefix("o1") || modelLower.hasPrefix("o3") || modelLower.hasPrefix("gpt-5")
+        
         // Build request body dynamically to support different reasoning parameters
         var requestDict: [String: Any] = [
             "model": derivedSelectedModel,
             "messages": [
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": inputText]
-            ],
-            "temperature": 0.2
+            ]
         ]
+        
+        // Only add temperature for non-reasoning models
+        // OpenAI reasoning models (o1, o3, gpt-5) don't support custom temperature
+        if !isReasoningModel {
+            requestDict["temperature"] = 0.2
+        }
         
         // Add reasoning parameter if configured for this model
         if let config = reasoningConfig, config.isEnabled {
