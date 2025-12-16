@@ -18,6 +18,8 @@ struct FeedbackView: View {
     @State private var includeDebugLogs: Bool = false
     @State private var isSendingFeedback: Bool = false
     @State private var showFeedbackConfirmation: Bool = false
+    @State private var showFeedbackError: Bool = false
+    @State private var feedbackErrorMessage: String = ""
     @State private var appear: Bool = false
     
     var body: some View {
@@ -195,6 +197,16 @@ struct FeedbackView: View {
         } message: {
             Text("Thank you for helping us improve FluidVoice.")
         }
+        .alert("Feedback Failed", isPresented: $showFeedbackError) {
+            Button("Try Again") {
+                Task {
+                    await sendFeedback()
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text(feedbackErrorMessage)
+        }
     }
     
     // MARK: - Feedback Functions
@@ -220,6 +232,10 @@ struct FeedbackView: View {
                 feedbackText = ""
                 feedbackEmail = ""
                 includeDebugLogs = false
+            } else {
+                // Show error to user - inputs are preserved for retry
+                feedbackErrorMessage = "We couldn't send your feedback. Please check your internet connection and try again."
+                showFeedbackError = true
             }
         }
     }

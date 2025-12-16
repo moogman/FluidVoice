@@ -568,9 +568,9 @@ struct CommandModeView: View {
     
     private func defaultModels(for provider: String) -> [String] {
         switch provider {
-        case "openai": return ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+        case "openai": return ["gpt-4.1"]
         case "groq": return ["llama-3.3-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768"]
-        default: return ["gpt-4o"]
+        default: return ["gpt-4.1"]
         }
     }
 }

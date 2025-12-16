@@ -15,6 +15,7 @@ final class WhisperProvider: TranscriptionProvider {
     
     private var whisper: Whisper?
     private(set) var isReady: Bool = false
+    private var loadedModelName: String?
     
     /// Model filename to use - reads from the unified SpeechModel setting
     /// Models: tiny (~75MB), base (~142MB), small (~466MB), medium (~1.5GB), large (~2.9GB)
@@ -32,6 +33,15 @@ final class WhisperProvider: TranscriptionProvider {
     }
     
     func prepare(progressHandler: ((Double) -> Void)? = nil) async throws {
+        // Detect model change: if a different model is now selected, force reload
+        let currentModelName = modelName
+        if isReady && loadedModelName != currentModelName {
+            DebugLogger.shared.info("WhisperProvider: Model changed from \(loadedModelName ?? "nil") to \(currentModelName), forcing reload", source: "WhisperProvider")
+            isReady = false
+            whisper = nil
+            loadedModelName = nil
+        }
+        
         guard isReady == false else { return }
         
         DebugLogger.shared.info("WhisperProvider: Starting model preparation", source: "WhisperProvider")
@@ -49,8 +59,9 @@ final class WhisperProvider: TranscriptionProvider {
         DebugLogger.shared.info("WhisperProvider: Loading Whisper model...", source: "WhisperProvider")
         whisper = Whisper(fromFileURL: modelURL)
         
+        loadedModelName = currentModelName
         isReady = true
-        DebugLogger.shared.info("WhisperProvider: Model ready", source: "WhisperProvider")
+        DebugLogger.shared.info("WhisperProvider: Model ready (\(currentModelName))", source: "WhisperProvider")
     }
     
     func transcribe(_ samples: [Float]) async throws -> ASRTranscriptionResult {
@@ -79,6 +90,7 @@ final class WhisperProvider: TranscriptionProvider {
         }
         isReady = false
         whisper = nil
+        loadedModelName = nil
     }
     
     // MARK: - Model Download
