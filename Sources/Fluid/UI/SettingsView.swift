@@ -299,51 +299,35 @@ struct SettingsView: View {
                                     
                                     Divider()
                                     
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        shortcutRow(
-                                            icon: "terminal.fill",
-                                            iconColor: .secondary,
-                                            title: "Command Mode",
-                                            description: "Execute voice commands",
-                                            shortcut: commandModeShortcut,
-                                            isRecording: isRecordingCommandModeShortcut,
-                                            isEnabled: commandModeShortcutEnabled,
-                                            onChangePressed: {
-                                                DebugLogger.shared.debug("Starting to record new command mode shortcut", source: "SettingsView")
-                                                isRecordingCommandModeShortcut = true
-                                            }
-                                        )
-                                        
-                                        Toggle("Enable Command Mode shortcut", isOn: $commandModeShortcutEnabled)
-                                            .font(.caption)
-                                            .controlSize(.mini)
-                                            .toggleStyle(.switch)
-                                            .tint(theme.palette.accent)
-                                    }
+                                    shortcutRow(
+                                        icon: "terminal.fill",
+                                        iconColor: .secondary,
+                                        title: "Command Mode",
+                                        description: "Execute voice commands",
+                                        shortcut: commandModeShortcut,
+                                        isRecording: isRecordingCommandModeShortcut,
+                                        isEnabled: $commandModeShortcutEnabled,
+                                        onChangePressed: {
+                                            DebugLogger.shared.debug("Starting to record new command mode shortcut", source: "SettingsView")
+                                            isRecordingCommandModeShortcut = true
+                                        }
+                                    )
                                     
                                     Divider()
                                     
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        shortcutRow(
-                                            icon: "pencil.and.outline",
-                                            iconColor: .secondary,
-                                            title: "Write Mode",
-                                            description: "Select text and speak how to rewrite, or write new content",
-                                            shortcut: rewriteShortcut,
-                                            isRecording: isRecordingRewriteShortcut,
-                                            isEnabled: rewriteShortcutEnabled,
-                                            onChangePressed: {
-                                                DebugLogger.shared.debug("Starting to record new write mode shortcut", source: "SettingsView")
-                                                isRecordingRewriteShortcut = true
-                                            }
-                                        )
-                                        
-                                        Toggle("Enable Write Mode shortcut", isOn: $rewriteShortcutEnabled)
-                                            .font(.caption)
-                                            .controlSize(.mini)
-                                            .toggleStyle(.switch)
-                                            .tint(theme.palette.accent)
-                                    }
+                                    shortcutRow(
+                                        icon: "pencil.and.outline",
+                                        iconColor: .secondary,
+                                        title: "Write Mode",
+                                        description: "Select text and speak how to rewrite, or write new content",
+                                        shortcut: rewriteShortcut,
+                                        isRecording: isRecordingRewriteShortcut,
+                                        isEnabled: $rewriteShortcutEnabled,
+                                        onChangePressed: {
+                                            DebugLogger.shared.debug("Starting to record new write mode shortcut", source: "SettingsView")
+                                            isRecordingRewriteShortcut = true
+                                        }
+                                    )
                                 }
                                 .padding(12)
                                 .background(
@@ -815,68 +799,75 @@ struct SettingsView: View {
         description: String,
         shortcut: HotkeyShortcut,
         isRecording: Bool,
-        isEnabled: Bool = true,
+        isEnabled: Binding<Bool>? = nil,
         onChangePressed: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .foregroundStyle(iconColor)
-                .frame(width: 20)
-            
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.body)
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        let enabledValue = isEnabled?.wrappedValue ?? true
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .foregroundStyle(iconColor)
+                    .frame(width: 20)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.body)
+                    Text(description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+                
+                if let isEnabled {
+                    Toggle("", isOn: isEnabled)
+                        .toggleStyle(.switch)
+                        .tint(theme.palette.accent)
+                        .labelsHidden()
+                }
             }
-            
-            Spacer()
-            
-            if !isEnabled {
-                Text("Shortcut disabled")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .fill(.quaternary.opacity(0.4))
-                    )
-            } else if isRecording {
-                Text("Press shortcut...")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.orange)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .fill(.orange.opacity(0.2))
-                    )
-            } else {
-                Text(shortcut.displayString)
-                    .font(.caption.monospaced().weight(.medium))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .fill(.quaternary.opacity(0.5))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                    .stroke(.primary.opacity(0.15), lineWidth: 1)
-                            )
-                    )
+
+            HStack(spacing: 10) {
+                Color.clear
+                    .frame(width: 20)
+
+                if isRecording && enabledValue {
+                    Text("Press shortcut...")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(.orange.opacity(0.2))
+                        )
+                } else {
+                    Text(shortcut.displayString)
+                        .font(.caption.monospaced().weight(.medium))
+                        .opacity(enabledValue ? 1 : 0.6)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(.quaternary.opacity(0.5))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                        .stroke(.primary.opacity(0.15), lineWidth: 1)
+                                )
+                        )
+                }
+
+                Button("Change") {
+                    onChangePressed()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(isRecording || !enabledValue)
             }
-            
-            Button("Change") {
-                onChangePressed()
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(isRecording || !isEnabled)
         }
-        .opacity(isEnabled ? 1 : 0.7)
+        .opacity(enabledValue ? 1 : 0.7)
     }
 }
 
