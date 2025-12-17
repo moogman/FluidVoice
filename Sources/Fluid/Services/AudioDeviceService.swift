@@ -1,13 +1,6 @@
-//
-//  AudioDeviceService.swift
-//  fluid
-//
-//  CoreAudio device management and monitoring
-//
-
-import Foundation
-import CoreAudio
 import Combine
+import CoreAudio
+import Foundation
 
 // MARK: - Audio Device Manager
 
@@ -28,14 +21,27 @@ enum AudioDevice {
         )
 
         var dataSize: UInt32 = 0
-        var status = AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &dataSize)
+        var status = AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0,
+            nil,
+            &dataSize
+        )
         if status != noErr || dataSize == 0 {
             return []
         }
 
         let count = Int(dataSize) / MemoryLayout<AudioObjectID>.size
         var deviceIDs = [AudioObjectID](repeating: 0, count: count)
-        status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &dataSize, &deviceIDs)
+        status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0,
+            nil,
+            &dataSize,
+            &deviceIDs
+        )
         if status != noErr {
             return []
         }
@@ -44,10 +50,18 @@ enum AudioDevice {
         devices.reserveCapacity(deviceIDs.count)
 
         for devId in deviceIDs {
-            let name = getStringProperty(devId, selector: kAudioObjectPropertyName, scope: kAudioObjectPropertyScopeGlobal) ?? "Unknown"
-            let uid = getStringProperty(devId, selector: kAudioDevicePropertyDeviceUID, scope: kAudioObjectPropertyScopeGlobal) ?? ""
-            let hasIn = hasChannels(devId, scope: kAudioObjectPropertyScopeInput)
-            let hasOut = hasChannels(devId, scope: kAudioObjectPropertyScopeOutput)
+            let name = self.getStringProperty(
+                devId,
+                selector: kAudioObjectPropertyName,
+                scope: kAudioObjectPropertyScopeGlobal
+            ) ?? "Unknown"
+            let uid = self.getStringProperty(
+                devId,
+                selector: kAudioDevicePropertyDeviceUID,
+                scope: kAudioObjectPropertyScopeGlobal
+            ) ?? ""
+            let hasIn = self.hasChannels(devId, scope: kAudioObjectPropertyScopeInput)
+            let hasOut = self.hasChannels(devId, scope: kAudioObjectPropertyScopeOutput)
             devices.append(Device(id: devId, uid: uid, name: name, hasInput: hasIn, hasOutput: hasOut))
         }
 
@@ -55,33 +69,35 @@ enum AudioDevice {
     }
 
     static func listInputDevices() -> [Device] {
-        return listAllDevices().filter { $0.hasInput }
+        return self.listAllDevices().filter { $0.hasInput }
     }
 
     static func listOutputDevices() -> [Device] {
-        return listAllDevices().filter { $0.hasOutput }
+        return self.listAllDevices().filter { $0.hasOutput }
     }
 
     static func getDefaultInputDevice() -> Device? {
-        guard let devId: AudioObjectID = getDefaultDeviceId(selector: kAudioHardwarePropertyDefaultInputDevice) else { return nil }
-        return listAllDevices().first { $0.id == devId }
+        guard let devId: AudioObjectID = getDefaultDeviceId(selector: kAudioHardwarePropertyDefaultInputDevice)
+        else { return nil }
+        return self.listAllDevices().first { $0.id == devId }
     }
 
     static func getDefaultOutputDevice() -> Device? {
-        guard let devId: AudioObjectID = getDefaultDeviceId(selector: kAudioHardwarePropertyDefaultOutputDevice) else { return nil }
-        return listAllDevices().first { $0.id == devId }
+        guard let devId: AudioObjectID = getDefaultDeviceId(selector: kAudioHardwarePropertyDefaultOutputDevice)
+        else { return nil }
+        return self.listAllDevices().first { $0.id == devId }
     }
 
     @discardableResult
     static func setDefaultInputDevice(uid: String) -> Bool {
         guard let device = listInputDevices().first(where: { $0.uid == uid }) else { return false }
-        return setDefaultDeviceId(device.id, selector: kAudioHardwarePropertyDefaultInputDevice)
+        return self.setDefaultDeviceId(device.id, selector: kAudioHardwarePropertyDefaultInputDevice)
     }
 
     @discardableResult
     static func setDefaultOutputDevice(uid: String) -> Bool {
         guard let device = listOutputDevices().first(where: { $0.uid == uid }) else { return false }
-        return setDefaultDeviceId(device.id, selector: kAudioHardwarePropertyDefaultOutputDevice)
+        return self.setDefaultDeviceId(device.id, selector: kAudioHardwarePropertyDefaultOutputDevice)
     }
 
     private static func getDefaultDeviceId(selector: AudioObjectPropertySelector) -> AudioObjectID? {
@@ -92,7 +108,14 @@ enum AudioDevice {
         )
         var devId = AudioObjectID(0)
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
-        let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &devId)
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0,
+            nil,
+            &size,
+            &devId
+        )
         return status == noErr ? devId : nil
     }
 
@@ -104,11 +127,22 @@ enum AudioDevice {
         )
         var mutableDevId = devId
         let size = UInt32(MemoryLayout<AudioObjectID>.size)
-        let status = AudioObjectSetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, size, &mutableDevId)
+        let status = AudioObjectSetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0,
+            nil,
+            size,
+            &mutableDevId
+        )
         return status == noErr
     }
 
-    private static func getStringProperty(_ devId: AudioObjectID, selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope) -> String? {
+    private static func getStringProperty(
+        _ devId: AudioObjectID,
+        selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope
+    ) -> String? {
         var address = AudioObjectPropertyAddress(
             mSelector: selector,
             mScope: scope,
@@ -180,11 +214,11 @@ final class AudioHardwareObserver: ObservableObject {
         // with SwiftUI's AttributeGraph metadata processing, leading to EXC_BAD_ACCESS crashes.
         // Registration is deferred until startObserving() is called after app finishes launching.
     }
-    
+
     /// Call this AFTER the app has finished launching to start observing audio hardware changes.
     /// This must be called from onAppear or later, never during init.
     func startObserving() {
-        register()
+        self.register()
     }
 
     deinit {
@@ -192,7 +226,7 @@ final class AudioHardwareObserver: ObservableObject {
     }
 
     private func register() {
-        guard installed == false else { return }
+        guard self.installed == false else { return }
         var addrDevices = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -222,18 +256,12 @@ final class AudioHardwareObserver: ObservableObject {
             self?.changeTick &+= 1
         }
 
-        installed = true
+        self.installed = true
     }
 
     private func unregister() {
-        guard installed else { return }
+        guard self.installed else { return }
         // Intentionally omitted: removing blocks is optional; listeners end with object lifetime.
-        installed = false
+        self.installed = false
     }
 }
-
-
-
-
-
-
