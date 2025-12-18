@@ -20,10 +20,14 @@ final class FunctionCallingProvider {
         let tool_call_id: String?
         let name: String?
 
+        enum CodingKeys: String, CodingKey {
+            case role, content, tool_calls, tool_call_id, name
+        }
+
         init(role: String, content: String?, tool_calls: [ToolCall]? = nil, tool_call_id: String? = nil, name: String? = nil) {
             self.role = role
             self.content = content
-            self.tool_calls = tool_calls
+            self.tool_calls = tool_calls ?? []
             self.tool_call_id = tool_call_id
             self.name = name
         }

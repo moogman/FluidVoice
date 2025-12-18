@@ -145,8 +145,8 @@ struct FeedbackView: View {
                                                 .foregroundStyle(.secondary)
                                         }
                                     }
-                                }
-                                .allowsHitTesting(false))
+                                )
+                                .allowsHitTesting(false)
 
                             // Debug logs option
                             Toggle("Include debug logs", isOn: self.$includeDebugLogs)
