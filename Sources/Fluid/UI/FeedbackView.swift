@@ -82,7 +82,7 @@ struct FeedbackView: View {
                             }
 
                             Spacer()
-                            
+
                             if let githubURL = URL(string: "https://github.com/altic-dev/Fluid-oss") {
                                 Link(destination: githubURL) {
                                     HStack(spacing: 8) {
@@ -137,11 +137,13 @@ struct FeedbackView: View {
                                     .overlay(RoundedRectangle(cornerRadius: 8)
                                         .strokeBorder(Color(nsColor: NSColor.separatorColor), lineWidth: 1.5)))
                                 .scrollContentBackground(.hidden)
-                                .overlay(VStack {
-                                    if self.feedbackText.isEmpty {
-                                        Text("Share your thoughts, report bugs, or suggest features...")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                .overlay(
+                                    VStack {
+                                        if self.feedbackText.isEmpty {
+                                            Text("Share your thoughts, report bugs, or suggest features...")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
                                 }
                                 .allowsHitTesting(false))

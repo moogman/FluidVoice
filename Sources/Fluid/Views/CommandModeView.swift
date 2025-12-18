@@ -270,9 +270,9 @@ struct CommandModeView: View {
     }
 
     // MARK: - Chat Area
-    
+
     @State private var isThinkingExpanded = false
-    
+
     private var chatArea: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -284,14 +284,14 @@ struct CommandModeView: View {
 
                     if self.service.isProcessing {
                         VStack(alignment: .leading, spacing: 8) {
-                            processingIndicator
-                            
+                            self.processingIndicator
+
                             // Show thinking tokens in collapsible section (real-time)
                             // Only show if setting is enabled AND there are thinking tokens
-                            if settings.showThinkingTokens && !service.streamingThinkingText.isEmpty {
-                                thinkingView
+                            if self.settings.showThinkingTokens && !self.service.streamingThinkingText.isEmpty {
+                                self.thinkingView
                             }
-                            
+
                             // Show streaming text in real-time
                             if !self.service.streamingText.isEmpty {
                                 self.streamingTextView
@@ -310,8 +310,8 @@ struct CommandModeView: View {
             .onChange(of: self.service.isProcessing) { _, isProcessing in
                 // Scroll when processing starts, not on every streaming update
                 if isProcessing {
-                    scrollToBottom(proxy)
-                    isThinkingExpanded = false  // Collapse thinking for new request
+                    self.scrollToBottom(proxy)
+                    self.isThinkingExpanded = false // Collapse thinking for new request
                 }
             }
             .onChange(of: self.service.currentStep) { _, _ in
@@ -320,19 +320,19 @@ struct CommandModeView: View {
             // Removed: .onChange(of: service.streamingText) - causes scroll on every token, too expensive
         }
     }
-    
+
     // MARK: - Thinking View (Cursor-style shimmer)
-    
+
     private var thinkingView: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header with shimmer effect - tap to expand/collapse
-            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isThinkingExpanded.toggle() } }) {
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { self.isThinkingExpanded.toggle() } }) {
                 HStack(spacing: 8) {
                     ThinkingShimmerLabel()
-                    
+
                     Spacer()
-                    
-                    Image(systemName: isThinkingExpanded ? "chevron.up" : "chevron.down")
+
+                    Image(systemName: self.isThinkingExpanded ? "chevron.up" : "chevron.down")
                         .font(.caption2)
                         .foregroundStyle(.secondary.opacity(0.6))
                 }
@@ -340,11 +340,11 @@ struct CommandModeView: View {
                 .padding(.vertical, 8)
             }
             .buttonStyle(.plain)
-            
+
             // Expanded content
-            if isThinkingExpanded {
+            if self.isThinkingExpanded {
                 ScrollView(.vertical, showsIndicators: true) {
-                    Text(service.streamingThinkingText)
+                    Text(self.service.streamingThinkingText)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -355,8 +355,8 @@ struct CommandModeView: View {
                 .frame(maxHeight: 200)
             } else {
                 // Preview - first 150 chars
-                if service.streamingThinkingText.count > 0 {
-                    Text(String(service.streamingThinkingText.prefix(150)) + (service.streamingThinkingText.count > 150 ? "..." : ""))
+                if self.service.streamingThinkingText.count > 0 {
+                    Text(String(self.service.streamingThinkingText.prefix(150)) + (self.service.streamingThinkingText.count > 150 ? "..." : ""))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary.opacity(0.7))
                         .lineLimit(2)
@@ -369,7 +369,7 @@ struct CommandModeView: View {
         .cornerRadius(8)
         .frame(maxWidth: 520, alignment: .leading)
     }
-    
+
     // MARK: - Processing Indicator (Minimal with Shimmer)
 
     private var processingIndicator: some View {
@@ -467,8 +467,10 @@ struct CommandModeView: View {
             }
             .background(Color(nsColor: .textBackgroundColor))
             .cornerRadius(8)
-            .overlay(RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.orange.opacity(0.5), lineWidth: 1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.orange.opacity(0.5), lineWidth: 1)
+            )
 
             HStack(spacing: 12) {
                 Button(action: { self.service.cancelPendingCommand() }) {
@@ -518,15 +520,10 @@ struct CommandModeView: View {
             }
 
             // Model Selector (compact)
-            Picker(
-                "",
-                selection: Binding(
-                    get: {
-                        self.settings.commandModeSelectedModel ?? self.availableModels.first ?? "gpt-4o"
-                    },
-                    set: { self.settings.commandModeSelectedModel = $0 }
-                )
-            ) {
+            Picker("", selection: Binding(
+                get: { self.settings.commandModeSelectedModel ?? self.availableModels.first ?? "gpt-4o" },
+                set: { self.settings.commandModeSelectedModel = $0 }
+            )) {
                 ForEach(self.availableModels, id: \.self) { model in
                     Text(model).tag(model)
                 }
@@ -646,17 +643,19 @@ struct CommandShimmerText: View {
     var body: some View {
         Text(self.text)
             .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(LinearGradient(
-                colors: [
-                    Color.primary.opacity(0.4),
-                    Color.primary.opacity(0.4),
-                    Color.primary.opacity(0.8),
-                    Color.primary.opacity(0.4),
-                    Color.primary.opacity(0.4),
-                ],
-                startPoint: UnitPoint(x: self.shimmerPhase - 0.3, y: 0.5),
-                endPoint: UnitPoint(x: self.shimmerPhase + 0.3, y: 0.5)
-            ))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [
+                        Color.primary.opacity(0.4),
+                        Color.primary.opacity(0.4),
+                        Color.primary.opacity(0.8),
+                        Color.primary.opacity(0.4),
+                        Color.primary.opacity(0.4),
+                    ],
+                    startPoint: UnitPoint(x: self.shimmerPhase - 0.3, y: 0.5),
+                    endPoint: UnitPoint(x: self.shimmerPhase + 0.3, y: 0.5)
+                )
+            )
             .onAppear {
                 withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
                     self.shimmerPhase = 1.3
@@ -670,18 +669,18 @@ struct CommandShimmerText: View {
 struct ThinkingShimmerLabel: View {
     @State private var shimmerPhase: CGFloat = -0.5
     @State private var sparkleOpacity: [Double] = [0.3, 0.5, 0.7, 0.4, 0.6]
-    
+
     var body: some View {
         HStack(spacing: 6) {
             // Sparkle dots with staggered animation
             HStack(spacing: 2) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()
-                        .fill(Color.primary.opacity(sparkleOpacity[index]))
+                        .fill(Color.primary.opacity(self.sparkleOpacity[index]))
                         .frame(width: 4, height: 4)
                 }
             }
-            
+
             // Shimmering "Think" text
             Text("Think")
                 .font(.system(size: 12, weight: .medium))
@@ -689,10 +688,10 @@ struct ThinkingShimmerLabel: View {
                     LinearGradient(
                         stops: [
                             .init(color: Color.primary.opacity(0.35), location: 0),
-                            .init(color: Color.primary.opacity(0.35), location: max(0, shimmerPhase - 0.15)),
-                            .init(color: Color.primary.opacity(0.85), location: shimmerPhase),
-                            .init(color: Color.primary.opacity(0.35), location: min(1, shimmerPhase + 0.15)),
-                            .init(color: Color.primary.opacity(0.35), location: 1)
+                            .init(color: Color.primary.opacity(0.35), location: max(0, self.shimmerPhase - 0.15)),
+                            .init(color: Color.primary.opacity(0.85), location: self.shimmerPhase),
+                            .init(color: Color.primary.opacity(0.35), location: min(1, self.shimmerPhase + 0.15)),
+                            .init(color: Color.primary.opacity(0.35), location: 1),
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
@@ -702,34 +701,33 @@ struct ThinkingShimmerLabel: View {
         .onAppear {
             // Shimmer animation - smooth left to right
             withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                shimmerPhase = 1.5
+                self.shimmerPhase = 1.5
             }
-            
+
             // Sparkle animation - staggered twinkling
-            animateSparkles()
+            self.animateSparkles()
         }
     }
-    
+
     private func animateSparkles() {
         // Create twinkling effect with staggered delays
         for i in 0..<3 {
             let delay = Double(i) * 0.15
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 withAnimation(.easeInOut(duration: 0.4).repeatForever(autoreverses: true)) {
-                    sparkleOpacity[i] = sparkleOpacity[i] > 0.5 ? 0.2 : 0.8
+                    self.sparkleOpacity[i] = self.sparkleOpacity[i] > 0.5 ? 0.2 : 0.8
                 }
             }
         }
     }
 }
 
-
 // MARK: - Message Bubble (Minimal Design)
 
 struct MessageBubble: View {
     let message: CommandModeService.Message
     @State private var isThinkingExpanded: Bool = false
-    
+
     var body: some View {
         HStack(alignment: .top) {
             if self.message.role == .user {
@@ -760,9 +758,9 @@ struct MessageBubble: View {
         VStack(alignment: .leading, spacing: 6) {
             // Thinking section (collapsible) - only if setting is enabled
             if let thinking = message.thinking, !thinking.isEmpty, SettingsStore.shared.showThinkingTokens {
-                thinkingSection(thinking)
+                self.thinkingSection(thinking)
             }
-            
+
             // Purpose label (minimal, gray)
             if let tc = message.toolCall, let purpose = tc.purpose {
                 Text(purpose)
@@ -781,13 +779,13 @@ struct MessageBubble: View {
         }
         .frame(maxWidth: 520, alignment: .leading)
     }
-    
+
     // MARK: - Thinking Section (Persisted, Collapsible)
-    
+
     private func thinkingSection(_ thinking: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header - tap to expand/collapse
-            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isThinkingExpanded.toggle() } }) {
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { self.isThinkingExpanded.toggle() } }) {
                 HStack(spacing: 6) {
                     HStack(spacing: 2) {
                         ForEach(0..<3, id: \.self) { _ in
@@ -799,14 +797,14 @@ struct MessageBubble: View {
                     Text("Think")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
-                    
+
                     Spacer()
-                    
+
                     Text("\(thinking.count) chars")
                         .font(.system(size: 9))
                         .foregroundStyle(.tertiary)
-                    
-                    Image(systemName: isThinkingExpanded ? "chevron.up" : "chevron.down")
+
+                    Image(systemName: self.isThinkingExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 9))
                         .foregroundStyle(.tertiary)
                 }
@@ -814,9 +812,9 @@ struct MessageBubble: View {
                 .padding(.vertical, 6)
             }
             .buttonStyle(.plain)
-            
+
             // Expanded content
-            if isThinkingExpanded {
+            if self.isThinkingExpanded {
                 ScrollView(.vertical, showsIndicators: true) {
                     Text(thinking)
                         .font(.system(size: 10))
@@ -840,7 +838,7 @@ struct MessageBubble: View {
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.4))
         .cornerRadius(6)
     }
-    
+
     // MARK: - Command Call View (Minimal)
 
     private func commandCallView(_ tc: CommandModeService.Message.ToolCall) -> some View {

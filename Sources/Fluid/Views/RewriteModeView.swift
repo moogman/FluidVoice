@@ -13,7 +13,7 @@ struct RewriteModeView: View {
     @State private var showHowTo: Bool = false
     @State private var isHoveringHowTo: Bool = false
     @State private var isThinkingExpanded: Bool = false
-    
+
     // Local state for available models (derived from shared AI Settings pool)
     @State private var availableModels: [String] = []
 
@@ -177,16 +177,10 @@ struct RewriteModeView: View {
 
                 // Model Selector (hidden for Apple Intelligence)
                 if self.settings.rewriteModeSelectedProviderID != "apple-intelligence" {
-                    Picker(
-                        "",
-                        selection: Binding(
-                            get: {
-                                self.settings.rewriteModeSelectedModel ?? self.availableModels
-                                    .first ?? "gpt-4o"
-                            },
-                            set: { self.settings.rewriteModeSelectedModel = $0 }
-                        )
-                    ) {
+                    Picker("", selection: Binding(
+                        get: { self.settings.rewriteModeSelectedModel ?? self.availableModels.first ?? "gpt-4o" },
+                        set: { self.settings.rewriteModeSelectedModel = $0 }
+                    )) {
                         ForEach(self.availableModels, id: \.self) { model in
                             Text(model).tag(model)
                         }
@@ -226,10 +220,10 @@ struct RewriteModeView: View {
             }
             .padding()
             .background(Color(nsColor: .windowBackgroundColor))
-            
+
             // Thinking view (real-time, during processing)
-            if service.isProcessing && settings.showThinkingTokens && !service.streamingThinkingText.isEmpty {
-                thinkingView
+            if self.service.isProcessing && self.settings.showThinkingTokens && !self.service.streamingThinkingText.isEmpty {
+                self.thinkingView
                     .padding(.horizontal)
                     .padding(.bottom, 8)
             }
@@ -430,19 +424,19 @@ struct RewriteModeView: View {
                 .foregroundStyle(.primary.opacity(0.8))
         }
     }
-    
+
     // MARK: - Thinking View (Cursor-style shimmer)
-    
+
     private var thinkingView: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header with shimmer effect - tap to expand/collapse
-            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isThinkingExpanded.toggle() } }) {
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { self.isThinkingExpanded.toggle() } }) {
                 HStack(spacing: 8) {
                     ThinkingShimmerLabel()
-                    
+
                     Spacer()
-                    
-                    Image(systemName: isThinkingExpanded ? "chevron.up" : "chevron.down")
+
+                    Image(systemName: self.isThinkingExpanded ? "chevron.up" : "chevron.down")
                         .font(.caption2)
                         .foregroundStyle(.secondary.opacity(0.6))
                 }
@@ -450,11 +444,11 @@ struct RewriteModeView: View {
                 .padding(.vertical, 8)
             }
             .buttonStyle(.plain)
-            
+
             // Expanded content
-            if isThinkingExpanded {
+            if self.isThinkingExpanded {
                 ScrollView(.vertical, showsIndicators: true) {
-                    Text(service.streamingThinkingText)
+                    Text(self.service.streamingThinkingText)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -465,8 +459,8 @@ struct RewriteModeView: View {
                 .frame(maxHeight: 150)
             } else {
                 // Preview - first 100 chars
-                if service.streamingThinkingText.count > 0 {
-                    Text(String(service.streamingThinkingText.prefix(100)) + (service.streamingThinkingText.count > 100 ? "..." : ""))
+                if self.service.streamingThinkingText.count > 0 {
+                    Text(String(self.service.streamingThinkingText.prefix(100)) + (self.service.streamingThinkingText.count > 100 ? "..." : ""))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary.opacity(0.7))
                         .lineLimit(2)

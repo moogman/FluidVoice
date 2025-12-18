@@ -6,15 +6,15 @@ import Foundation
 final class RewriteModeService: ObservableObject {
     @Published var originalText: String = ""
     @Published var rewrittenText: String = ""
-    @Published var streamingThinkingText: String = ""  // Real-time thinking tokens for UI
+    @Published var streamingThinkingText: String = "" // Real-time thinking tokens for UI
     @Published var isProcessing = false
     @Published var conversationHistory: [Message] = []
     @Published var isWriteMode: Bool = false // true = no text selected (write/improve), false = text selected (rewrite)
 
     private let textSelectionService = TextSelectionService.shared
     private let typingService = TypingService()
-    private var thinkingBuffer: [String] = []  // Buffer thinking tokens
-    
+    private var thinkingBuffer: [String] = [] // Buffer thinking tokens
+
     struct Message: Identifiable, Equatable {
         let id = UUID()
         let role: Role
@@ -77,10 +77,7 @@ final class RewriteModeService: ObservableObject {
                 self.conversationHistory.append(Message(role: .user, content: rewritePrompt))
             } else {
                 // Follow-up request
-                self.conversationHistory.append(Message(
-                    role: .user,
-                    content: "Follow-up instruction: \(prompt)\n\nApply this to the previous result. Output ONLY the updated text."
-                ))
+                self.conversationHistory.append(Message(role: .user, content: "Follow-up instruction: \(prompt)\n\nApply this to the previous result. Output ONLY the updated text."))
             }
         }
 
@@ -106,12 +103,12 @@ final class RewriteModeService: ObservableObject {
     }
 
     func clearState() {
-        originalText = ""
-        rewrittenText = ""
-        streamingThinkingText = ""
-        conversationHistory = []
-        isWriteMode = false
-        thinkingBuffer = []
+        self.originalText = ""
+        self.rewrittenText = ""
+        self.streamingThinkingText = ""
+        self.conversationHistory = []
+        self.isWriteMode = false
+        self.thinkingBuffer = []
     }
 
     // MARK: - LLM Integration
@@ -180,7 +177,7 @@ final class RewriteModeService: ObservableObject {
             Output ONLY the rewritten text. No explanations, no quotes around the text, no preamble.
             """
         }
-        
+
         // Build messages array for LLMClient
         var apiMessages: [[String: Any]] = [
             ["role": "system", "content": systemPrompt],
@@ -195,7 +192,7 @@ final class RewriteModeService: ObservableObject {
 
         // Reasoning models (o1, o3, gpt-5) don't support temperature parameter at all
         let isReasoningModel = settings.isReasoningModel(model)
-        
+
         // Get reasoning config for this model (e.g., reasoning_effort, enable_thinking)
         let reasoningConfig = settings.getReasoningConfig(forModel: model, provider: providerID)
         var extraParams: [String: Any]? = nil
@@ -207,7 +204,7 @@ final class RewriteModeService: ObservableObject {
             }
             DebugLogger.shared.debug("Added reasoning param: \(rConfig.parameterName)=\(rConfig.parameterValue)", source: "RewriteModeService")
         }
-        
+
         // Build LLMClient configuration
         var config = LLMClient.Config(
             messages: apiMessages,
@@ -219,7 +216,7 @@ final class RewriteModeService: ObservableObject {
             temperature: isReasoningModel ? nil : 0.7,
             extraParameters: extraParams
         )
-        
+
         // Add real-time streaming callbacks for UI updates
         if enableStreaming {
             // Thinking tokens callback
@@ -229,7 +226,7 @@ final class RewriteModeService: ObservableObject {
                     self?.streamingThinkingText = self?.thinkingBuffer.joined() ?? ""
                 }
             }
-            
+
             // Content callback
             config.onContentChunk = { [weak self] chunk in
                 Task { @MainActor in
@@ -237,29 +234,29 @@ final class RewriteModeService: ObservableObject {
                 }
             }
         }
-        
+
         DebugLogger.shared.info("Using LLMClient for Write/Rewrite (streaming=\(enableStreaming))", source: "RewriteModeService")
-        
+
         // Clear streaming buffers before starting
         if enableStreaming {
-            rewrittenText = ""
-            streamingThinkingText = ""
-            thinkingBuffer = []
+            self.rewrittenText = ""
+            self.streamingThinkingText = ""
+            self.thinkingBuffer = []
         }
-        
+
         let response = try await LLMClient.shared.call(config)
-        
+
         // Clear thinking display after response complete
-        streamingThinkingText = ""
-        thinkingBuffer = []
-        
+        self.streamingThinkingText = ""
+        self.thinkingBuffer = []
+
         // Log thinking if present (for debugging)
         if let thinking = response.thinking {
             DebugLogger.shared.debug("LLM thinking tokens extracted (\(thinking.count) chars)", source: "RewriteModeService")
         }
-        
+
         DebugLogger.shared.debug("Response complete. Content length: \(response.content.count)", source: "RewriteModeService")
-        
+
         // For non-streaming, we return the content directly
         // For streaming, rewrittenText is already updated via callback,
         // but we return the final content for consistency
