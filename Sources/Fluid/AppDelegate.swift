@@ -130,7 +130,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 if result.hasUpdate {
                     DebugLogger.shared.info("✅ Update available: \(result.latestVersion)", source: "AppDelegate")
-                    
+
                     // Check if user snoozed this version (clicked "Later")
                     if SettingsStore.shared.shouldShowUpdatePrompt(forVersion: result.latestVersion) {
                         // Show update notification on main thread

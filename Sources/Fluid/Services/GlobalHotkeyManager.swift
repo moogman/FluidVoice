@@ -393,12 +393,12 @@ final class GlobalHotkeyManager: NSObject {
             if self.rewriteModeShortcutEnabled, self.rewriteModeShortcut.modifierFlags.isEmpty {
                 // Check if this is an actual modifier key (not a regular key)
                 let isModifierKey = keyCode == 54 || keyCode == 55 || // Command keys
-                                   keyCode == 58 || keyCode == 61 || // Option keys
-                                   keyCode == 59 || keyCode == 62 || // Control keys
-                                   keyCode == 56 || keyCode == 60 || // Shift keys
-                                   keyCode == 63 // Function key
-                
-                if isModifierKey && keyCode == self.rewriteModeShortcut.keyCode {
+                    keyCode == 58 || keyCode == 61 || // Option keys
+                    keyCode == 59 || keyCode == 62 || // Control keys
+                    keyCode == 56 || keyCode == 60 || // Shift keys
+                    keyCode == 63 // Function key
+
+                if isModifierKey, keyCode == self.rewriteModeShortcut.keyCode {
                     if isModifierPressed {
                         if self.pressAndHoldMode {
                             if !self.isRewriteKeyPressed {
