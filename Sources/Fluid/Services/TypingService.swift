@@ -171,7 +171,6 @@ final class TypingService {
         return true
     }
 
-
     private func insertTextViaAccessibility(_ text: String) -> Bool {
         self.log("[TypingService] Starting Accessibility API insertion")
 
