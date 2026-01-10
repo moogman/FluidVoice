@@ -16,6 +16,30 @@ enum AIConnectionStatus {
     case unknown, testing, success, failed
 }
 
+private enum PromptEditorMode: Identifiable, Equatable {
+    case defaultPrompt
+    case newPrompt
+    case edit(promptID: String)
+
+    var id: String {
+        switch self {
+        case .defaultPrompt: return "default"
+        case .newPrompt: return "new"
+        case let .edit(promptID): return "edit:\(promptID)"
+        }
+    }
+
+    var isDefault: Bool {
+        if case .defaultPrompt = self { return true }
+        return false
+    }
+
+    var editingPromptID: String? {
+        if case let .edit(promptID) = self { return promptID }
+        return nil
+    }
+}
+
 struct AISettingsView: View {
     @EnvironmentObject private var appServices: AppServices
     @EnvironmentObject private var menuBarManager: MenuBarManager
@@ -80,9 +104,7 @@ struct AISettingsView: View {
     @State private var removeFillerWordsEnabled: Bool = SettingsStore.shared.removeFillerWordsEnabled
 
     // Dictation Prompt Profiles UI
-    @State private var showingPromptEditor: Bool = false
-    @State private var editorIsDefaultPrompt: Bool = false
-    @State private var editingPromptID: String? = nil
+    @State private var promptEditorMode: PromptEditorMode? = nil
     @State private var draftPromptName: String = ""
     @State private var draftPromptText: String = ""
     @State private var promptEditorSessionID: UUID = UUID()
@@ -1583,8 +1605,8 @@ struct AISettingsView: View {
             .padding(14)
         }
         .modifier(CardAppearAnimation(delay: 0.3, appear: self.$appear))
-        .sheet(isPresented: self.$showingPromptEditor) {
-            self.promptEditorSheet
+        .sheet(item: self.$promptEditorMode) { mode in
+            self.promptEditorSheet(mode: mode)
         }
     }
 
@@ -1691,13 +1713,22 @@ struct AISettingsView: View {
         )
     }
 
-    private var promptEditorSheet: some View {
+    private func promptEditorSheet(mode: PromptEditorMode) -> some View {
         VStack(spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(self.editorIsDefaultPrompt ? "Default Dictation Prompt" : "Edit Dictation Prompt")
+                    Text({
+                        switch mode {
+                        case .defaultPrompt: return "Default Dictation Prompt"
+                        case .newPrompt: return "New Dictation Prompt"
+                        case .edit: return "Edit Dictation Prompt"
+                        }
+                    }())
                         .font(.headline)
-                    Text(self.editorIsDefaultPrompt ? "This is the built-in prompt. Create a custom prompt to override it." : "Name and prompt text are used as the system prompt for dictation cleanup.")
+                    Text(mode.isDefault
+                        ? "This is the built-in prompt. Create a custom prompt to override it."
+                        : "Name and prompt text are used as the system prompt for dictation cleanup."
+                    )
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1708,9 +1739,10 @@ struct AISettingsView: View {
                 Text("Name")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                let isDefaultNameLocked = mode.isDefault
                 TextField("Prompt name", text: self.$draftPromptName)
                     .textFieldStyle(.roundedBorder)
-                    .disabled(self.editorIsDefaultPrompt)
+                    .disabled(isDefaultNameLocked)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -1848,16 +1880,16 @@ struct AISettingsView: View {
             )
 
             HStack(spacing: 10) {
-                Button(self.editorIsDefaultPrompt ? "Close" : "Cancel") {
+                Button(mode.isDefault ? "Close" : "Cancel") {
                     self.closePromptEditor()
                 }
                 .buttonStyle(.bordered)
 
                 Button("Save") {
-                    self.savePromptEditor()
+                    self.savePromptEditor(mode: mode)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!self.editorIsDefaultPrompt && self.draftPromptName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!mode.isDefault && self.draftPromptName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding()
@@ -1868,36 +1900,28 @@ struct AISettingsView: View {
     }
 
     private func openDefaultPromptViewer() {
-        self.editorIsDefaultPrompt = true
-        self.editingPromptID = nil
         self.draftPromptName = "Default"
         self.draftPromptText = self.settings.defaultDictationPromptOverride ?? self.defaultDictationPromptText()
         self.promptEditorSessionID = UUID()
-        self.showingPromptEditor = true
+        self.promptEditorMode = .defaultPrompt
     }
 
     private func openNewPromptEditor() {
-        self.editorIsDefaultPrompt = false
-        self.editingPromptID = nil
         self.draftPromptName = "New Prompt"
         self.draftPromptText = ""
         self.promptEditorSessionID = UUID()
-        self.showingPromptEditor = true
+        self.promptEditorMode = .newPrompt
     }
 
     private func openEditor(for profile: SettingsStore.DictationPromptProfile) {
-        self.editorIsDefaultPrompt = false
-        self.editingPromptID = profile.id
         self.draftPromptName = profile.name
         self.draftPromptText = profile.prompt
         self.promptEditorSessionID = UUID()
-        self.showingPromptEditor = true
+        self.promptEditorMode = .edit(promptID: profile.id)
     }
 
     private func closePromptEditor() {
-        self.showingPromptEditor = false
-        self.editorIsDefaultPrompt = false
-        self.editingPromptID = nil
+        self.promptEditorMode = nil
         self.draftPromptName = ""
         self.draftPromptText = ""
         self.promptTest.deactivate()
@@ -1909,9 +1933,9 @@ struct AISettingsView: View {
         DictationAIPostProcessingGate.isConfigured()
     }
 
-    private func savePromptEditor() {
+    private func savePromptEditor(mode: PromptEditorMode) {
         // Default prompt is non-deletable; save it via the optional override (empty is allowed).
-        if self.editorIsDefaultPrompt {
+        if mode.isDefault {
             self.settings.defaultDictationPromptOverride = self.draftPromptText
             self.closePromptEditor()
             return
@@ -1923,7 +1947,7 @@ struct AISettingsView: View {
         var profiles = SettingsStore.shared.dictationPromptProfiles
         let now = Date()
 
-        if let id = self.editingPromptID,
+        if let id = mode.editingPromptID,
            let idx = profiles.firstIndex(where: { $0.id == id })
         {
             var updated = profiles[idx]

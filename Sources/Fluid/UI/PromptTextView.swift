@@ -8,6 +8,7 @@ struct PromptTextView: NSViewRepresentable {
 
     var isEditable: Bool = true
     var font: NSFont = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+    var contentInset: CGFloat = 10
 
     func makeCoordinator() -> Coordinator {
         Coordinator(text: self.$text)
@@ -28,6 +29,8 @@ struct PromptTextView: NSViewRepresentable {
         textView.drawsBackground = false
         textView.font = self.font
         textView.delegate = context.coordinator
+        textView.textContainerInset = NSSize(width: self.contentInset, height: self.contentInset)
+        textView.textContainer?.lineFragmentPadding = 0
 
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
@@ -56,6 +59,12 @@ struct PromptTextView: NSViewRepresentable {
         textView.isSelectable = true
         textView.drawsBackground = false
         if textView.font != self.font { textView.font = self.font }
+        if textView.textContainerInset != NSSize(width: self.contentInset, height: self.contentInset) {
+            textView.textContainerInset = NSSize(width: self.contentInset, height: self.contentInset)
+        }
+        if textView.textContainer?.lineFragmentPadding != 0 {
+            textView.textContainer?.lineFragmentPadding = 0
+        }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
