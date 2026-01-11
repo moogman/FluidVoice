@@ -19,15 +19,8 @@ struct WelcomeView: View {
     @Environment(\.theme) private var theme
 
     let accessibilityEnabled: Bool
-    let providerAPIKeys: [String: String]
-    let currentProvider: String
-    let openAIBaseURL: String
-    let availableModels: [String]
-    let selectedModel: String
-
     let stopAndProcessTranscription: () async -> Void
     let startRecording: () -> Void
-    let isLocalEndpoint: (String) -> Bool
     let openAccessibilitySettings: () -> Void
 
     private var commandModeShortcutDisplay: String {
@@ -110,28 +103,11 @@ struct WelcomeView: View {
 
                             SetupStepView(
                                 step: 4,
-                                title: {
-                                    let hasApiKey = self.providerAPIKeys[self.currentProvider]?.isEmpty == false
-                                    let isLocal = self.isLocalEndpoint(self.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines))
-                                    let hasModel = self.availableModels.contains(self.selectedModel)
-                                    let isConfigured = (isLocal || hasApiKey) && hasModel
-                                    return isConfigured ? "AI Enhancement Configured" : "Set Up AI Enhancement (Optional)"
-                                }(),
-                                description: {
-                                    let hasApiKey = self.providerAPIKeys[self.currentProvider]?.isEmpty == false
-                                    let isLocal = self.isLocalEndpoint(self.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines))
-                                    let hasModel = self.availableModels.contains(self.selectedModel)
-                                    let isConfigured = (isLocal || hasApiKey) && hasModel
-                                    return isConfigured
-                                        ? "AI-powered text enhancement is ready to use"
-                                        : "Configure API keys for AI-powered text enhancement"
-                                }(),
-                                status: {
-                                    let hasApiKey = self.providerAPIKeys[self.currentProvider]?.isEmpty == false
-                                    let isLocal = self.isLocalEndpoint(self.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines))
-                                    let hasModel = self.availableModels.contains(self.selectedModel)
-                                    return ((isLocal || hasApiKey) && hasModel) ? .completed : .pending
-                                }(),
+                                title: self.settings.isAIConfigured ? "AI Enhancement Configured" : "Set Up AI Enhancement (Optional)",
+                                description: self.settings.isAIConfigured
+                                    ? "AI-powered text enhancement is ready to use"
+                                    : "Configure API keys for AI-powered text enhancement",
+                                status: self.settings.isAIConfigured ? .completed : .pending,
                                 action: {
                                     self.selectedSidebarItem = .aiSettings
                                 },

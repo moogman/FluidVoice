@@ -477,17 +477,7 @@ struct AISettingsView: View {
     }
 
     private func isLocalEndpoint(_ urlString: String) -> Bool {
-        guard let url = URL(string: urlString), let host = url.host else { return false }
-        let hostLower = host.lowercased()
-        if hostLower == "localhost" || hostLower == "127.0.0.1" { return true }
-        if hostLower.hasPrefix("127.") || hostLower.hasPrefix("10.") || hostLower.hasPrefix("192.168.") { return true }
-        if hostLower.hasPrefix("172.") {
-            let components = hostLower.split(separator: ".")
-            if components.count >= 2, let secondOctet = Int(components[1]), secondOctet >= 16 && secondOctet <= 31 {
-                return true
-            }
-        }
-        return false
+        return ModelRepository.shared.isLocalEndpoint(urlString)
     }
 
     private func hasReasoningConfigForCurrentModel() -> Bool {

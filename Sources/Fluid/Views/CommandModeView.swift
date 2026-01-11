@@ -595,30 +595,7 @@ struct CommandModeView: View {
 
     /// Returns possible keys used to store models for a provider.
     private func providerKeys(for providerID: String) -> [String] {
-        var keys: [String] = []
-        let trimmed = providerID.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if trimmed.isEmpty {
-            return [providerID]
-        }
-
-        // Built-in providers use their ID directly
-        if ModelRepository.shared.isBuiltIn(trimmed) {
-            return [trimmed]
-        }
-
-        if trimmed.hasPrefix("custom:") {
-            keys.append(trimmed)
-            keys.append(String(trimmed.dropFirst("custom:".count)))
-        } else {
-            keys.append("custom:\(trimmed)")
-            keys.append(trimmed)
-        }
-
-        // Add legacy key used in ContentView before the fix
-        keys.append("custom:\\(trimmed)")
-
-        return Array(Set(keys))
+        return ModelRepository.shared.providerKeys(for: providerID)
     }
 
     private var builtInProvidersList: [(id: String, name: String)] {

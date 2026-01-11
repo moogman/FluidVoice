@@ -456,6 +456,44 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    /// Check if the current AI provider is fully configured (API key/baseURL + selected model)
+    var isAIConfigured: Bool {
+        let providerID = self.selectedProviderID
+
+        // 1. Apple Intelligence is always considered configured
+        if providerID == "apple-intelligence" { return true }
+
+        // 2. Get base URL to check for local endpoints
+        var baseURL = ""
+        if let saved = self.savedProviders.first(where: { $0.id == providerID }) {
+            baseURL = saved.baseURL
+        } else {
+            baseURL = ModelRepository.shared.defaultBaseURL(for: providerID)
+        }
+
+        let isLocal = ModelRepository.shared.isLocalEndpoint(baseURL)
+
+        // 3. Check for API key and selected model
+        let key = self.canonicalProviderKey(for: providerID)
+        let hasApiKey = !(self.providerAPIKeys[key]?.isEmpty ?? true)
+
+        let selectedModel = self.selectedModelByProvider[key]
+        let hasSelectedModel = !(selectedModel?.isEmpty ?? true)
+        let hasDefaultModel = !ModelRepository.shared.defaultModels(for: providerID).isEmpty
+        let hasModel = hasSelectedModel || hasDefaultModel
+
+        return (isLocal || hasApiKey) && hasModel
+    }
+
+    /// The base URL for the currently selected AI provider
+    var activeBaseURL: String {
+        let providerID = self.selectedProviderID
+        if let saved = self.savedProviders.first(where: { $0.id == providerID }) {
+            return saved.baseURL
+        }
+        return ModelRepository.shared.defaultBaseURL(for: providerID)
+    }
+
     var hotkeyShortcut: HotkeyShortcut {
         get {
             if let data = defaults.data(forKey: Keys.hotkeyShortcutKey),
