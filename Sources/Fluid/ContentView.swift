@@ -976,7 +976,8 @@ struct ContentView: View {
     private func providerKey(for providerID: String) -> String {
         // Built-in providers use their ID directly
         if ModelRepository.shared.isBuiltIn(providerID) { return providerID }
-        // Saved providers use their stable id with "custom:" prefix
+        // Saved providers use their stable id with "custom:" prefix (if not already present)
+        if providerID.hasPrefix("custom:") { return providerID }
         return providerID.isEmpty ? self.currentProvider : "custom:\(providerID)"
     }
 

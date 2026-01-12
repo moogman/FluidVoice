@@ -447,7 +447,8 @@ struct AISettingsView: View {
     private func providerKey(for providerID: String) -> String {
         // Built-in providers use their ID directly
         if ModelRepository.shared.isBuiltIn(providerID) { return providerID }
-        // Custom providers get "custom:" prefix
+        // Custom providers get "custom:" prefix (if not already present)
+        if providerID.hasPrefix("custom:") { return providerID }
         return providerID.isEmpty ? self.currentProvider : "custom:\(providerID)"
     }
 
@@ -1115,11 +1116,13 @@ struct AISettingsView: View {
         self.saveProviderAPIKeys()
         SettingsStore.shared.availableModelsByProvider = self.availableModelsByProvider
         SettingsStore.shared.selectedModelByProvider = self.selectedModelByProvider
+        // Reset to OpenAI
         self.selectedProviderID = "openai"
         self.openAIBaseURL = ModelRepository.shared.defaultBaseURL(for: "openai")
         self.updateCurrentProvider()
-        self.availableModels = ModelRepository.shared.defaultModels(for: "openai")
-        self.selectedModel = self.availableModels.first ?? self.selectedModel
+        // Use fetched models if available, fall back to defaults (same logic as handleProviderChange)
+        self.availableModels = self.availableModelsByProvider["openai"] ?? ModelRepository.shared.defaultModels(for: "openai")
+        self.selectedModel = self.selectedModelByProvider["openai"] ?? self.availableModels.first ?? ""
     }
 
     private var editProviderSection: some View {
