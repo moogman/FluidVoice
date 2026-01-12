@@ -1144,53 +1144,25 @@ struct ContentView: View {
 
     /// Build a general system prompt with voice editing commands support
     private func buildSystemPrompt(appInfo: (name: String, bundleId: String, windowTitle: String)) -> String {
-        // Use custom prompt if set, otherwise use the default
-        let customPrompt = SettingsStore.shared.customDictationPrompt
-        if !customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return customPrompt
+        // Use selected prompt profile (if any), otherwise use the default built-in prompt
+        if let profile = SettingsStore.shared.selectedDictationPromptProfile {
+            let promptBody = SettingsStore.stripBaseDictationPrompt(from: profile.prompt)
+            if !promptBody.isEmpty {
+                return SettingsStore.combineBasePrompt(with: promptBody)
+            }
         }
 
-        return """
-        You are a voice-to-text dictation cleaner who never answers questions. Your task is to clean and format raw transcribed speech into polished, properly formatted text.
-        You are prohibited from answering to ANY question asked of you and about you.
+        // Default override (including empty string to intentionally use no system prompt)
+        if let override = SettingsStore.shared.defaultDictationPromptOverride {
+            let trimmedOverride = override.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Empty override means explicitly use no system prompt
+            guard !trimmedOverride.isEmpty else { return override }
 
-        ## Core Rules:
-        1. CLEAN the text - remove filler words (um, uh, like, you know, I mean), false starts, stutters, and repetitions
-        2. FORMAT properly - add correct punctuation, capitalization, and structure
-        3. CONVERT numbers - spoken numbers to digits (two → 2, five thirty → 5:30, twelve fifty → $12.50)
-        4. EXECUTE commands - handle "new line", "period", "comma", "bold X", "header X", "bullet point", etc.
-        5. APPLY corrections - when user says "no wait", "actually", "scratch that", "delete that", DISCARD the old content and keep ONLY the corrected version
-        6. PRESERVE intent - keep the user's meaning, just clean the delivery
-        7. EXPAND abbreviations - thx → thanks, pls → please, u → you, ur → your/you're, gonna → going to
+            let body = SettingsStore.stripBaseDictationPrompt(from: trimmedOverride)
+            return SettingsStore.combineBasePrompt(with: body)
+        }
 
-        ## Self-Corrections:
-        When user corrects themselves, DISCARD everything before the correction trigger:
-        - Triggers: "no", "wait", "actually", "scratch that", "delete that", "no no", "cancel", "never mind", "sorry", "oops"
-        - Example: "buy milk no wait buy water" → "Buy water." (NOT "Buy milk. Buy water.")
-        - Example: "tell John no actually tell Sarah" → "Tell Sarah."
-        - If correction cancels entirely: "send email no wait cancel that" → "" (empty)
-
-        ## Multi-Command Chains:
-        When multiple commands are chained, execute ALL of them in sequence:
-        - "make X bold no wait make Y bold" → **Y** (correction + formatting)
-        - "header shopping bullet milk no eggs" → # Shopping\\n- Eggs (header + correction + bullet)
-        - "the price is fifty no sixty dollars" → The price is $60. (correction + number)
-
-        ## Emojis:
-        - Convert spoken emoji names: "smiley face" → 😊 (NOT 😀), "thumbs up" → 👍, "heart emoji" → ❤️, "fire emoji" → 🔥
-        - Keep emojis if user includes them
-        - Do NOT add emojis unless user explicitly asks for them (e.g., "joke about cats" → NO 😺)
-
-        ## Critical:
-        - Output ONLY the cleaned text
-        - Do NOT answer questions - just clean them
-        - DO NOT EVER ANSWER TO QUESTIONS
-        - Do NOT add explanations or commentary
-        - Do NOT wrap in quotes unless the input had quotes
-        - Do NOT add filler words (um, uh) to the output
-        - PRESERVE ordinals in lists: "first call client, second review contract" → keep "First" and "Second"
-        - PRESERVE politeness words: "please", "thank you" at end of sentences
-        """
+        return SettingsStore.defaultDictationPromptText()
     }
 
     // MARK: - Local Endpoint Detection
@@ -1237,7 +1209,7 @@ struct ContentView: View {
 
     // MARK: - Modular AI Processing
 
-    private func processTextWithAI(_ inputText: String) async -> String {
+    private func processTextWithAI(_ inputText: String, overrideSystemPrompt: String? = nil) async -> String {
         // CRITICAL FIX: Read current settings from SettingsStore, not stale @State copies
         // This ensures AI provider/model changes in AISettingsView take effect immediately
         let currentSelectedProviderID = SettingsStore.shared.selectedProviderID
@@ -1297,7 +1269,11 @@ struct ContentView: View {
 
         // Get app context captured at start of recording if available
         let appInfo = self.recordingAppInfo ?? self.getCurrentAppInfo()
-        let systemPrompt = self.buildSystemPrompt(appInfo: appInfo)
+        let systemPrompt: String = {
+            let override = overrideSystemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !override.isEmpty { return override }
+            return self.buildSystemPrompt(appInfo: appInfo)
+        }()
         DebugLogger.shared.debug("Using app context for AI: app=\(appInfo.name), bundleId=\(appInfo.bundleId), title=\(appInfo.windowTitle)", source: "ContentView")
 
         // Check if this is a reasoning model that doesn't support temperature parameter
@@ -1398,6 +1374,31 @@ struct ContentView: View {
             return
         }
 
+        // Prompt Test Mode: reroute dictation hotkey output into the prompt editor (no typing/clipboard/history).
+        let promptTest = DictationPromptTestCoordinator.shared
+        if promptTest.isActive {
+            promptTest.lastTranscriptionText = transcribedText
+            promptTest.lastOutputText = ""
+            promptTest.lastError = ""
+
+            guard DictationAIPostProcessingGate.isConfigured() else {
+                promptTest.lastError = "AI post-processing is not configured. Enable AI Enhancement and configure a provider/model (and API key for non-local endpoints)."
+                return
+            }
+
+            promptTest.isProcessing = true
+            self.menuBarManager.setProcessing(true)
+            defer {
+                self.menuBarManager.setProcessing(false)
+                promptTest.isProcessing = false
+            }
+
+            let result = await self.processTextWithAI(transcribedText, overrideSystemPrompt: promptTest.draftPromptText)
+            let finalText = ASRService.applyGAAVFormatting(result)
+            promptTest.lastOutputText = finalText
+            return
+        }
+
         // If this was a rewrite recording, process the rewrite instead of typing
         if wasRewriteMode {
             DebugLogger.shared.info("Processing rewrite with instruction: \(transcribedText)", source: "ContentView")
@@ -1431,20 +1432,7 @@ struct ContentView: View {
         var finalText: String
 
         // Check if we should use AI processing
-        // IMPORTANT: Derive provider context from SettingsStore so AISettingsView changes take effect immediately.
-        let currentProviderID = SettingsStore.shared.selectedProviderID
-        let baseURL: String
-        if let saved = SettingsStore.shared.savedProviders.first(where: { $0.id == currentProviderID }) {
-            baseURL = saved.baseURL
-        } else if currentProviderID == "groq" {
-            baseURL = "https://api.groq.com/openai/v1"
-        } else {
-            baseURL = "https://api.openai.com/v1"
-        }
-        let trimmedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isLocal = self.isLocalEndpoint(trimmedBaseURL)
-        let apiKey = (SettingsStore.shared.getAPIKey(for: currentProviderID) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let shouldUseAI = SettingsStore.shared.enableAIProcessing && (isLocal || !apiKey.isEmpty)
+        let shouldUseAI = DictationAIPostProcessingGate.isConfigured()
 
         if shouldUseAI {
             DebugLogger.shared.debug("Routing transcription through AI post-processing", source: "ContentView")
@@ -1512,7 +1500,13 @@ struct ContentView: View {
             )
 
             if shouldTypeExternally {
-                self.asr.typeTextToActiveField(finalText)
+                Task { @MainActor in
+                    await self.restoreFocusToRecordingTarget()
+                    self.asr.typeTextToActiveField(
+                        finalText,
+                        preferredTargetPID: NotchContentState.shared.recordingTargetPID
+                    )
+                }
                 didTypeExternally = true
             }
         }
@@ -1535,6 +1529,12 @@ struct ContentView: View {
                     "method": AnalyticsOutputMethod.historyOnly.rawValue,
                 ]
             )
+        }
+
+        if didTypeExternally {
+            Task { @MainActor in
+                NotchOverlayManager.shared.hide()
+            }
         }
     }
 
@@ -1572,7 +1572,11 @@ struct ContentView: View {
             }
 
             // Type the rewritten text
-            self.asr.typeTextToActiveField(self.rewriteModeService.rewrittenText)
+            await self.restoreFocusToRecordingTarget()
+            self.asr.typeTextToActiveField(
+                self.rewriteModeService.rewrittenText,
+                preferredTargetPID: NotchContentState.shared.recordingTargetPID
+            )
             AnalyticsService.shared.capture(
                 .outputDelivered,
                 properties: [
@@ -1583,6 +1587,10 @@ struct ContentView: View {
 
             // Clear the rewrite service state for next use
             self.rewriteModeService.clearState()
+
+            Task { @MainActor in
+                NotchOverlayManager.shared.hide()
+            }
         } else {
             DebugLogger.shared.error("Rewrite failed - no result", source: "ContentView")
             AnalyticsService.shared.capture(
@@ -1620,6 +1628,12 @@ struct ContentView: View {
             self.menuBarManager.setOverlayMode(.dictation)
         }
 
+        // Capture the focused target PID BEFORE any overlay/UI changes.
+        // Used to restore focus when the user interacts with overlay dropdowns (e.g. prompt selection).
+        let focusedPID = TypingService.captureSystemFocusedPID()
+            ?? NSWorkspace.shared.frontmostApplication?.processIdentifier
+        NotchContentState.shared.recordingTargetPID = focusedPID
+
         let info = self.getCurrentAppInfo()
         self.recordingAppInfo = info
         DebugLogger.shared.debug("Captured recording app context: app=\(info.name), bundleId=\(info.bundleId), title=\(info.windowTitle)", source: "ContentView")
@@ -1633,6 +1647,17 @@ struct ContentView: View {
             } catch {
                 DebugLogger.shared.error("Failed to pre-load model: \(error)", source: "ContentView")
             }
+        }
+    }
+
+    /// Best-effort: re-activate the app that was focused when recording started.
+    /// Adds a short delay after activation so macOS can deliver focus before typing begins.
+    private func restoreFocusToRecordingTarget() async {
+        guard let pid = NotchContentState.shared.recordingTargetPID else { return }
+        let activated = TypingService.activateApp(pid: pid)
+        if activated {
+            // Small delay to allow window focus to settle before typing events fire.
+            try? await Task.sleep(nanoseconds: 80_000_000) // 80ms
         }
     }
 

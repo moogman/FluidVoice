@@ -181,6 +181,8 @@ final class BottomOverlayWindowController {
 struct BottomOverlayView: View {
     @ObservedObject private var contentState = NotchContentState.shared
     @ObservedObject private var settings = SettingsStore.shared
+    @State private var showPromptHoverMenu = false
+    @State private var promptHoverWorkItem: DispatchWorkItem?
 
     struct LayoutConstants {
         let hPadding: CGFloat
@@ -281,11 +283,94 @@ struct BottomOverlayView: View {
         !self.contentState.transcriptionText.isEmpty
     }
 
+    private var isDictationMode: Bool {
+        self.contentState.mode == .dictation
+    }
+
+    private var selectedPromptLabel: String {
+        if let profile = self.settings.selectedDictationPromptProfile {
+            let name = profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? "Untitled" : name
+        }
+        return "Default"
+    }
+
     // Show last ~60 characters of transcription on single line
     private var transcriptionSuffix: String {
         let text = self.contentState.transcriptionText
         let maxChars = 60
         return text.count > maxChars ? "..." + String(text.suffix(maxChars)) : text
+    }
+
+    private func handlePromptHover(_ hovering: Bool) {
+        self.promptHoverWorkItem?.cancel()
+        let task = DispatchWorkItem {
+            self.showPromptHoverMenu = hovering
+        }
+        self.promptHoverWorkItem = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + (hovering ? 0.05 : 0.15), execute: task)
+    }
+
+    private func promptMenuContent() -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: {
+                self.settings.selectedDictationPromptID = nil
+                let pid = NotchContentState.shared.recordingTargetPID
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    if let pid { _ = TypingService.activateApp(pid: pid) }
+                }
+                self.showPromptHoverMenu = false
+            }) {
+                HStack {
+                    Text("Default")
+                    Spacer()
+                    if self.settings.selectedDictationPromptID == nil {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 4)
+
+            if !self.settings.dictationPromptProfiles.isEmpty {
+                Divider()
+                    .padding(.vertical, 4)
+
+                ForEach(self.settings.dictationPromptProfiles) { profile in
+                    Button(action: {
+                        self.settings.selectedDictationPromptID = profile.id
+                        let pid = NotchContentState.shared.recordingTargetPID
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            if let pid { _ = TypingService.activateApp(pid: pid) }
+                        }
+                        self.showPromptHoverMenu = false
+                    }) {
+                        HStack {
+                            Text(profile.name.isEmpty ? "Untitled" : profile.name)
+                            Spacer()
+                            if self.settings.selectedDictationPromptID == profile.id {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Color.black.opacity(0.92))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+        .onHover { hovering in
+            self.handlePromptHover(hovering)
+        }
     }
 
     var body: some View {
@@ -305,6 +390,40 @@ struct BottomOverlayView: View {
                 }
             }
             .frame(maxWidth: self.layout.waveformWidth * 2.2, minHeight: self.hasTranscription || self.contentState.isProcessing ? self.layout.transFontSize * 1.5 : 0)
+
+            // Dictation prompt selector (only in dictation mode)
+            if self.isDictationMode && !self.contentState.isProcessing {
+                ZStack(alignment: .top) {
+                    HStack(spacing: 6) {
+                        Text("Prompt:")
+                            .font(.system(size: self.layout.modeFontSize, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.5))
+                        Text(self.selectedPromptLabel)
+                            .font(.system(size: self.layout.modeFontSize, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: max(self.layout.modeFontSize - 2, 9), weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(8)
+                    .onHover { hovering in
+                        self.handlePromptHover(hovering)
+                    }
+
+                    if self.showPromptHoverMenu {
+                        self.promptMenuContent()
+                            .padding(.top, self.layout.modeFontSize + 14)
+                            .transition(.opacity)
+                            .zIndex(10)
+                    }
+                }
+                .frame(maxWidth: self.layout.waveformWidth * 2.0, alignment: .top)
+                .transition(.opacity)
+            }
 
             // Waveform + Mode label row
             HStack(spacing: self.layout.hPadding / 1.5) {

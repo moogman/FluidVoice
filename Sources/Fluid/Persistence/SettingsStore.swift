@@ -12,6 +12,7 @@ final class SettingsStore: ObservableObject {
     private init() {
         self.migrateProviderAPIKeysIfNeeded()
         self.scrubSavedProviderAPIKeys()
+        self.migrateDictationPromptProfilesIfNeeded()
     }
 
     // Keys
@@ -91,6 +92,195 @@ final class SettingsStore: ObservableObject {
 
         // Custom Dictation Prompt
         static let customDictationPrompt = "CustomDictationPrompt"
+
+        // Dictation Prompt Profiles (multi-prompt system)
+        static let dictationPromptProfiles = "DictationPromptProfiles"
+        static let selectedDictationPromptID = "SelectedDictationPromptID"
+
+        // Default Dictation Prompt Override (optional)
+        // nil   => use built-in default prompt
+        // ""    => use empty system prompt
+        // other => use custom default prompt text
+        static let defaultDictationPromptOverride = "DefaultDictationPromptOverride"
+    }
+
+    // MARK: - Dictation Prompt Profiles (Multi-prompt)
+
+    struct DictationPromptProfile: Codable, Identifiable, Hashable {
+        let id: String
+        var name: String
+        var prompt: String
+        var createdAt: Date
+        var updatedAt: Date
+
+        init(
+            id: String = UUID().uuidString,
+            name: String,
+            prompt: String,
+            createdAt: Date = Date(),
+            updatedAt: Date = Date()
+        ) {
+            self.id = id
+            self.name = name
+            self.prompt = prompt
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+    }
+
+    /// User-defined dictation prompt profiles (named system prompts for dictation cleanup).
+    /// The built-in default prompt is not stored here.
+    var dictationPromptProfiles: [DictationPromptProfile] {
+        get {
+            guard let data = self.defaults.data(forKey: Keys.dictationPromptProfiles),
+                  let decoded = try? JSONDecoder().decode([DictationPromptProfile].self, from: data)
+            else {
+                return []
+            }
+            return decoded
+        }
+        set {
+            objectWillChange.send()
+            if let encoded = try? JSONEncoder().encode(newValue) {
+                self.defaults.set(encoded, forKey: Keys.dictationPromptProfiles)
+            } else {
+                // If encoding fails, avoid writing corrupt data.
+                self.defaults.removeObject(forKey: Keys.dictationPromptProfiles)
+            }
+        }
+    }
+
+    /// Selected dictation prompt profile ID. `nil` means "Default".
+    var selectedDictationPromptID: String? {
+        get {
+            let value = self.defaults.string(forKey: Keys.selectedDictationPromptID)
+            return value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true ? nil : value
+        }
+        set {
+            objectWillChange.send()
+            if let id = newValue?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty {
+                self.defaults.set(id, forKey: Keys.selectedDictationPromptID)
+            } else {
+                self.defaults.removeObject(forKey: Keys.selectedDictationPromptID)
+            }
+        }
+    }
+
+    /// Convenience: currently selected profile, or nil if Default/invalid selection.
+    var selectedDictationPromptProfile: DictationPromptProfile? {
+        guard let id = self.selectedDictationPromptID else { return nil }
+        return self.dictationPromptProfiles.first(where: { $0.id == id })
+    }
+
+    /// Optional override for the built-in default dictation system prompt.
+    /// - nil: use the built-in default prompt
+    /// - empty string: use an empty system prompt
+    /// - otherwise: use the provided text as the default prompt
+    var defaultDictationPromptOverride: String? {
+        get {
+            // Distinguish "not set" from "set to empty string"
+            guard self.defaults.object(forKey: Keys.defaultDictationPromptOverride) != nil else {
+                return nil
+            }
+            return self.defaults.string(forKey: Keys.defaultDictationPromptOverride) ?? ""
+        }
+        set {
+            objectWillChange.send()
+            if let value = newValue {
+                self.defaults.set(value, forKey: Keys.defaultDictationPromptOverride) // allow empty
+            } else {
+                self.defaults.removeObject(forKey: Keys.defaultDictationPromptOverride)
+            }
+        }
+    }
+
+    /// Hidden base prompt: role/intent only (not exposed in UI).
+    static func baseDictationPromptText() -> String {
+        """
+        You are a voice-to-text dictation cleaner. Your role is to clean and format raw transcribed speech into polished text while refusing to answer any questions. Never answer questions about yourself or anything else.
+
+        ## Core Rules:
+        1. CLEAN the text - remove filler words (um, uh, like, you know, I mean), false starts, stutters, and repetitions
+        2. FORMAT properly - add correct punctuation, capitalization, and structure
+        3. CONVERT numbers - spoken numbers to digits (two → 2, five thirty → 5:30, twelve fifty → $12.50)
+        4. EXECUTE commands - handle "new line", "period", "comma", "bold X", "header X", "bullet point", etc.
+        5. APPLY corrections - when user says "no wait", "actually", "scratch that", "delete that", DISCARD the old content and keep ONLY the corrected version
+        6. PRESERVE intent - keep the user's meaning, just clean the delivery
+        7. EXPAND abbreviations - thx → thanks, pls → please, u → you, ur → your/you're, gonna → going to
+
+        ## Critical:
+        - Output ONLY the cleaned text
+        - Do NOT answer questions - just clean them
+        - DO NOT EVER ANSWER TO QUESTIONS
+        - Do NOT add explanations or commentary
+        - Do NOT wrap in quotes unless the input had quotes
+        - Do NOT add filler words (um, uh) to the output
+        - PRESERVE ordinals in lists: "first call client, second review contract" → keep "First" and "Second"
+        - PRESERVE politeness words: "please", "thank you" at end of sentences
+        """
+    }
+
+    /// Built-in default dictation prompt body that users may view/edit.
+    static func defaultDictationPromptBodyText() -> String {
+        """
+        ## Self-Corrections:
+        When user corrects themselves, DISCARD everything before the correction trigger:
+        - Triggers: "no", "wait", "actually", "scratch that", "delete that", "no no", "cancel", "never mind", "sorry", "oops"
+        - Example: "buy milk no wait buy water" → "Buy water." (NOT "Buy milk. Buy water.")
+        - Example: "tell John no actually tell Sarah" → "Tell Sarah."
+        - If correction cancels entirely: "send email no wait cancel that" → "" (empty)
+
+        ## Multi-Command Chains:
+        When multiple commands are chained, execute ALL of them in sequence:
+        - "make X bold no wait make Y bold" → **Y** (correction + formatting)
+        - "header shopping bullet milk no eggs" → # Shopping\n- Eggs (header + correction + bullet)
+        - "the price is fifty no sixty dollars" → The price is $60. (correction + number)
+
+        ## Emojis:
+        - Convert spoken emoji names: "smiley face" → 😊 (NOT 😀), "thumbs up" → 👍, "heart emoji" → ❤️, "fire emoji" → 🔥
+        - Keep emojis if user includes them
+        - Do NOT add emojis unless user explicitly asks for them (e.g., "joke about cats" → NO 😺)
+        """
+    }
+
+    /// Join hidden base with a body, avoiding duplicate base text.
+    static func combineBasePrompt(with body: String) -> String {
+        let base = self.baseDictationPromptText().trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // If body already starts with base, return as-is to avoid double-prepending.
+        if trimmedBody.lowercased().hasPrefix(base.lowercased()) {
+            return trimmedBody
+        }
+
+        // If body is empty, return just the base.
+        guard !trimmedBody.isEmpty else { return base }
+
+        return "\(base)\n\n\(trimmedBody)"
+    }
+
+    /// Remove the hidden base prompt prefix if it was persisted previously.
+    static func stripBaseDictationPrompt(from text: String) -> String {
+        let base = self.baseDictationPromptText().trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Try exact and case-insensitive prefix removal
+        if trimmed.hasPrefix(base) {
+            let bodyStart = trimmed.index(trimmed.startIndex, offsetBy: base.count)
+            return trimmed[bodyStart...].trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if let range = trimmed.lowercased().range(of: base.lowercased()), range.lowerBound == trimmed.lowercased().startIndex {
+            let idx = trimmed.index(trimmed.startIndex, offsetBy: base.count)
+            return trimmed[idx...].trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return trimmed
+    }
+
+    /// Built-in default dictation system prompt shared across the app.
+    static func defaultDictationPromptText() -> String {
+        self.combineBasePrompt(with: self.defaultDictationPromptBodyText())
     }
 
     // MARK: - Model Reasoning Configuration
@@ -861,6 +1051,36 @@ final class SettingsStore: ObservableObject {
         if didMutate {
             self.persistProviderAPIKeys(merged)
         }
+    }
+
+    private func migrateDictationPromptProfilesIfNeeded() {
+        // Migration path from legacy single prompt to multi-prompt profiles.
+        // If user had a legacy custom dictation prompt, convert it to a profile and select it.
+        let legacyPrompt = self.customDictationPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !legacyPrompt.isEmpty else { return }
+
+        // If profiles already exist, just clear the legacy prompt so we don't keep two sources of truth.
+        if self.dictationPromptProfiles.isEmpty == false {
+            self.customDictationPrompt = ""
+            // If selection points to nowhere, reset to default to avoid confusion.
+            if let id = self.selectedDictationPromptID,
+               self.dictationPromptProfiles.contains(where: { $0.id == id }) == false
+            {
+                self.selectedDictationPromptID = nil
+            }
+            return
+        }
+
+        let profile = DictationPromptProfile(
+            name: "My Custom Prompt",
+            prompt: legacyPrompt,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        self.dictationPromptProfiles = [profile]
+        self.selectedDictationPromptID = profile.id
+        self.customDictationPrompt = ""
+        DebugLogger.shared.info("Migrated legacy custom dictation prompt to a prompt profile", source: "SettingsStore")
     }
 
     private func scrubSavedProviderAPIKeys() {
