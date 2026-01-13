@@ -98,6 +98,6 @@ final class MediaPlaybackService {
         )
 
         // Use explicit play() command - never toggle
-        mediaController.play()
+        self.mediaController.play()
     }
 }

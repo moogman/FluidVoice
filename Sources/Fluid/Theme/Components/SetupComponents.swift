@@ -153,5 +153,3 @@ struct InstructionStep: View {
         }
     }
 }
-
-

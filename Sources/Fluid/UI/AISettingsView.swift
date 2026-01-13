@@ -823,8 +823,6 @@ struct AISettingsView: View {
             }
             .modifier(CardAppearAnimation(delay: 0.1, appear: self.$appear))
 
-
-
             // Advanced Settings Card
             self.advancedSettingsCard
         }
@@ -1567,8 +1565,6 @@ struct AISettingsView: View {
         self.showingSaveProvider = false
         self.newProviderName = ""; self.newProviderBaseURL = ""; self.newProviderApiKey = ""; self.newProviderModels = ""
     }
-
-
 
     // MARK: - Advanced Settings Card
 
