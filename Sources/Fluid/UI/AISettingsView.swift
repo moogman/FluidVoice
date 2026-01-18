@@ -16,6 +16,155 @@ enum AIConnectionStatus {
     case unknown, testing, success, failed
 }
 
+// MARK: - Liquid Layer Shape (Gentle bobbing wave)
+
+/// A gentle wave surface that bobs up and down
+private struct LiquidLayer: Shape {
+    var phase: Double  // Phase offset for this layer
+    var time: Double   // Animation time
+    
+    var animatableData: Double {
+        get { time }
+        set { time = newValue }
+    }
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let width = Double(rect.width)
+        let height = Double(rect.height)
+        
+        // Wave surface very close to the top (only 3% offset for wave amplitude)
+        let baseY = height * 0.03
+        
+        path.move(to: CGPoint(x: 0, y: CGFloat(baseY)))
+        
+        // Create a gentle, organic wave surface
+        for x in stride(from: 0.0, through: width, by: 1.0) {
+            let normalizedX = x / width
+            
+            // Slow, gentle wave like water sloshing in a jar
+            let waveAmplitude = 2.0
+            let waveFrequency = 1.5  // Lower frequency = broader, more ocean-like waves
+            let y = baseY + sin((normalizedX * waveFrequency + time * 0.25 + phase) * .pi) * waveAmplitude
+
+
+            
+            path.addLine(to: CGPoint(x: CGFloat(x), y: CGFloat(y)))
+        }
+        
+        // Fill down to bottom
+        path.addLine(to: CGPoint(x: CGFloat(width), y: CGFloat(height)))
+        path.addLine(to: CGPoint(x: 0, y: CGFloat(height)))
+        path.closeSubpath()
+        
+        return path
+    }
+}
+
+/// A vertical liquid-filled bar with animated fill level
+private struct LiquidBar: View {
+    let fillPercent: Double
+    let color: Color
+    let secondaryColor: Color
+    let icon: String
+    let label: String
+    
+    // Animated fill level (smoothly transitions between values)
+    @State private var animatedFill: Double = 0
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            // Label
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                    .foregroundStyle(color)
+                Text(label)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            
+            // Liquid Container (Capsule Glass)
+            ZStack(alignment: .bottom) {
+                // Background (Empty glass interior)
+                Capsule()
+                    .fill(Color.black.opacity(0.35))
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.25), .white.opacity(0.05)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    )
+                
+                // Single clean liquid layer with animated height
+                GeometryReader { geo in
+                    let displayHeight = geo.size.height * CGFloat(animatedFill)
+                    
+                    TimelineView(.animation(minimumInterval: 1.0/30.0)) { timeline in
+                        let time = timeline.date.timeIntervalSinceReferenceDate
+                        
+                        // Single organic liquid surface
+                        LiquidLayer(phase: 0.0, time: time)
+                            .fill(
+                                LinearGradient(
+                                    colors: [color, secondaryColor],
+                                    startPoint: .bottom,
+                                    endPoint: .top
+                                )
+                            )
+                            .frame(height: displayHeight)
+                    }
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                }
+                .clipShape(Capsule())
+                .padding(3)
+                
+                // Glass highlight (3D glossy effect)
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .white.opacity(0.25), location: 0),
+                                .init(color: .white.opacity(0.08), location: 0.25),
+                                .init(color: .clear, location: 0.5)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .padding(2)
+                    .allowsHitTesting(false)
+            }
+            .frame(width: 48, height: 90)
+            
+            // Percentage (shows target, not animated)
+            Text("\(Int(fillPercent * 100))%")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(fillPercent > 0 ? color : .secondary)
+                .contentTransition(.numericText())
+        }
+        .onAppear {
+            // Initialize to target on first appear
+            animatedFill = fillPercent
+        }
+        .onChange(of: fillPercent) { _, newValue in
+            // Animate liquid level change with a gentle "sloshing" feel
+            withAnimation(.interpolatingSpring(stiffness: 140, damping: 18)) {
+                animatedFill = newValue
+            }
+        }
+    }
+}
+
+
+
+
+
 private enum PromptEditorMode: Identifiable, Equatable {
     case defaultPrompt
     case newPrompt
@@ -116,6 +265,11 @@ struct AISettingsView: View {
     @State private var pendingDeletePromptID: String? = nil
     @State private var pendingDeletePromptName: String = ""
 
+    // Speech Model Provider Tab Selection
+    @State private var selectedSpeechProvider: SettingsStore.SpeechModel.Provider = .nvidia
+    @State private var previewSpeechModel: SettingsStore.SpeechModel = SettingsStore.shared.selectedSpeechModel
+    @State private var showAdvancedSpeechInfo: Bool = false
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
@@ -149,6 +303,11 @@ struct AISettingsView: View {
         .onChange(of: self.selectedProviderID) { _, newValue in
             SettingsStore.shared.selectedProviderID = newValue
         }
+        .onChange(of: self.settings.selectedSpeechModel) { _, newValue in
+            // Keep preview in sync if the active model changes elsewhere
+            self.previewSpeechModel = newValue
+            self.selectedSpeechProvider = newValue.provider
+        }
         .onChange(of: self.showKeychainPermissionAlert) { _, isPresented in
             guard isPresented else { return }
             self.presentKeychainAccessAlert(message: self.keychainPermissionMessage)
@@ -180,6 +339,8 @@ struct AISettingsView: View {
         self.selectedModelByProvider = SettingsStore.shared.selectedModelByProvider
         self.providerAPIKeys = SettingsStore.shared.providerAPIKeys
         self.savedProviders = SettingsStore.shared.savedProviders
+        self.previewSpeechModel = SettingsStore.shared.selectedSpeechModel
+        self.selectedSpeechProvider = SettingsStore.shared.selectedSpeechModel.provider
 
         // Normalize provider keys
         var normalized: [String: [String]] = [:]
@@ -212,7 +373,9 @@ struct AISettingsView: View {
 
         // Determine initial model list AND set baseURL BEFORE calling updateCurrentProvider
         if let saved = savedProviders.first(where: { $0.id == selectedProviderID }) {
-            self.availableModels = saved.models
+            let key = self.providerKey(for: self.selectedProviderID)
+            let stored = self.availableModelsByProvider[key]
+            self.availableModels = saved.models.isEmpty ? (stored ?? []) : saved.models
             self.openAIBaseURL = saved.baseURL // Set this FIRST
         } else if ModelRepository.shared.isBuiltIn(self.selectedProviderID) {
             // Handle all built-in providers using ModelRepository
@@ -243,89 +406,346 @@ struct AISettingsView: View {
 
     private var speechRecognitionCard: some View {
         ThemedCard(hoverEffect: false) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Image(systemName: "brain.head.profile")
+            VStack(alignment: .leading, spacing: 14) {
+                // Header
+                HStack(spacing: 10) {
+                    Image(systemName: "waveform")
                         .font(.title2)
-                        .foregroundStyle(.white)
-                    Text("Speech Recognition")
+                        .foregroundStyle(self.theme.palette.accent)
+                    Text("Voice Engine")
                         .font(.title3)
                         .fontWeight(.semibold)
+                    Toggle("Show model names", isOn: self.$showAdvancedSpeechInfo)
+                        .toggleStyle(.checkbox)
+                        .font(.caption)
+                    Spacer()
                 }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    // Single unified model picker
-                    HStack(spacing: 12) {
-                        Text("Model")
-                            .fontWeight(.medium)
-                        Spacer()
-                        Menu(SettingsStore.shared.selectedSpeechModel.displayName) {
-                            ForEach(SettingsStore.SpeechModel.availableModels) { model in
-                                Button {
-                                    SettingsStore.shared.selectedSpeechModel = model
-                                    self.asr.resetTranscriptionProvider()
-                                } label: {
-                                    HStack {
-                                        Text(model.displayName)
-                                        Spacer()
-                                        Text("\(model.languageSupport) • \(model.downloadSize)")
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                        .disabled(self.asr.isRunning)
-                    }
-
-                    // Model info badges
-                    HStack(spacing: 8) {
-                        Label(SettingsStore.shared.selectedSpeechModel.languageSupport, systemImage: "globe")
-                            .font(.caption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(RoundedRectangle(cornerRadius: 5).fill(.quaternary))
-
-                        Label(SettingsStore.shared.selectedSpeechModel.downloadSize, systemImage: "arrow.down.circle")
-                            .font(.caption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(RoundedRectangle(cornerRadius: 5).fill(.quaternary))
-
-                        Spacer()
-
-                        if SettingsStore.shared.selectedSpeechModel.requiresAppleSilicon {
-                            Text("Apple Silicon")
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(self.theme.palette.accent.opacity(0.2)))
+                // Provider Tabs (centered, no label)
+                HStack {
+                    Spacer()
+                    Picker("", selection: self.$selectedSpeechProvider) {
+                        ForEach(SettingsStore.SpeechModel.Provider.allCases, id: \.self) { provider in
+                            Text(provider.rawValue).tag(provider)
                         }
                     }
-
-                    // Model status indicator
-                    self.modelStatusView
-
-                    // Performance note
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(self.theme.palette.accent)
-                            .font(.caption)
-                        Text(self.modelDescriptionText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(10)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial.opacity(0.3)))
-
-                    Divider().padding(.vertical, 4)
-
-                    // Filler Words Section
-                    self.fillerWordsSection
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(maxWidth: 280)
+                    Spacer()
                 }
+                .padding(.vertical, 4)
+                .onChange(of: self.selectedSpeechProvider) { _, newProvider in
+                    // Preview the first model in the new provider (do not activate)
+                    if let firstModel = SettingsStore.SpeechModel.models(for: newProvider).first {
+                        self.previewSpeechModel = firstModel
+                    }
+                }
+
+                // Stats Panel - Dynamic bars that update based on selected model
+                self.modelStatsPanel
+
+                // Model Cards for selected provider
+                VStack(spacing: 8) {
+                    ForEach(SettingsStore.SpeechModel.models(for: self.selectedSpeechProvider)) { model in
+                        self.speechModelCard(for: model)
+                    }
+                }
+
+                Divider().padding(.vertical, 4)
+
+                // Filler Words Section
+                self.fillerWordsSection
             }
             .padding(14)
         }
     }
+
+    /// Stats panel showing speed/accuracy bars that animate when model changes
+    private var modelStatsPanel: some View {
+        let model = self.previewSpeechModel
+
+        return VStack(alignment: .leading, spacing: 8) {
+            // Model name and description
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(model.humanReadableName)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(self.theme.palette.primaryText)
+
+                    if let badge = model.badgeText {
+                        Text(badge)
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(badge == "FluidVoice Pick" ? .cyan.opacity(0.2) : .orange.opacity(0.2)))
+                            .foregroundStyle(badge == "FluidVoice Pick" ? .cyan : .orange)
+                    }
+
+                    Spacer()
+                }
+
+                Text(model.cardDescription)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            HStack(spacing: 8) {
+                Label(model.downloadSize, systemImage: "internaldrive")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                if model.requiresAppleSilicon {
+                    Text("Apple Silicon")
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(self.theme.palette.accent.opacity(0.2)))
+                        .foregroundStyle(self.theme.palette.accent)
+                }
+
+                Text(model.languageSupport)
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(.quaternary))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+            }
+
+            // Speed and Accuracy - Vertical Liquid Bars (FluidVoice easter egg!)
+            HStack(spacing: 16) {
+                Spacer()
+
+                // Speed liquid bar
+                LiquidBar(
+                    fillPercent: model.speedPercent,
+                    color: .yellow,
+                    secondaryColor: .orange,
+                    icon: "bolt.fill",
+                    label: "Speed"
+                )
+
+                // Accuracy liquid bar
+                LiquidBar(
+                    fillPercent: model.accuracyPercent,
+                    color: .green,
+                    secondaryColor: .cyan,
+                    icon: "target",
+                    label: "Accuracy"
+                )
+
+                Spacer()
+            }
+            .animation(.spring(response: 0.5, dampingFraction: 0.7), value: model.id)
+        }
+        .padding(.vertical, 6)
+    }
+
+    /// Simplified card for selecting a speech model
+    private func speechModelCard(for model: SettingsStore.SpeechModel) -> some View {
+        let isSelected = self.previewSpeechModel == model
+        let isActive = self.isActiveSpeechModel(model)
+
+        return HStack(spacing: 10) {
+            // Selection indicator
+            Circle()
+                .fill(isSelected ? .green : .white.opacity(0.1))
+                .frame(width: 8, height: 8)
+                .overlay(
+                    Circle()
+                        .stroke(isSelected ? .green : .white.opacity(0.3), lineWidth: 1)
+                )
+
+            // Brand logo/badge - fixed size container for consistency
+            ZStack {
+                if model.usesAppleLogo {
+                    // Apple logo uses SF Symbol
+                    Image(systemName: "apple.logo")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: model.brandColorHex) ?? .gray)
+                } else {
+                    // Text badges (NVIDIA, OpenAI)
+                    Text(model.brandName)
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color(hex: model.brandColorHex) ?? .gray)
+                        )
+                }
+            }
+            .frame(width: 48, height: 18, alignment: .center)
+
+            // Title + technical name
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.humanReadableName)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? self.theme.palette.primaryText : .secondary)
+                if self.showAdvancedSpeechInfo {
+                    Text(model.displayName)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary.opacity(0.7))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Action area (right side)
+            if (self.asr.isDownloadingModel || self.asr.isLoadingModel) && isActive && !self.asr.isAsrReady {
+                VStack(alignment: .trailing, spacing: 4) {
+                    if let progress = self.asr.downloadProgress, self.asr.isDownloadingModel {
+                        ProgressView(value: progress)
+                            .progressViewStyle(.linear)
+                            .frame(width: 90)
+                        Text("\(Int(progress * 100))%")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ProgressView()
+                            .controlSize(.mini)
+                        Text(self.asr.isLoadingModel ? "Loading…" : "Downloading…")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else if model.isInstalled {
+                HStack(spacing: 8) {
+                    if isActive {
+                        let isLoading = (self.asr.isLoadingModel || self.asr.isDownloadingModel) && !self.asr.isAsrReady
+                        Text(isLoading ? "Loading…" : "Active")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(isLoading ? .orange.opacity(0.25) : .green.opacity(0.25)))
+                            .foregroundStyle(isLoading ? .orange : .green)
+                    } else {
+                        Button("Activate") {
+                            self.activateSpeechModel(model)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                        .tint(.green)
+                    .fontWeight(.semibold)
+                    .shadow(color: .green.opacity(0.35), radius: 4, x: 0, y: 1)
+                        .disabled(self.asr.isRunning)
+                    }
+
+                    if !model.usesAppleLogo {
+                        Button {
+                            self.deleteSpeechModel(model)
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 15))
+                                .foregroundStyle(.red.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(self.asr.isRunning)
+                    }
+                }
+            } else {
+                Button("Download") {
+                    self.previewSpeechModel = model
+                    self.downloadSpeechModel(model)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(.blue)
+                .disabled(self.asr.isRunning)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? .white.opacity(0.05) : .clear)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isSelected ? .white.opacity(0.25) : .white.opacity(0.05), lineWidth: 1)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isActive ? .green.opacity(0.9) : .clear, lineWidth: 2)
+                )
+        )
+        .onTapGesture {
+            self.previewSpeechModel = model
+        }
+        .opacity(self.asr.isRunning ? 0.6 : 1.0)
+        .allowsHitTesting(!self.asr.isRunning)
+    }
+
+    private func activateSpeechModel(_ model: SettingsStore.SpeechModel) {
+        guard !self.asr.isRunning else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            SettingsStore.shared.selectedSpeechModel = model
+            self.previewSpeechModel = model
+            self.selectedSpeechProvider = model.provider
+        }
+        self.asr.resetTranscriptionProvider()
+        Task {
+            do {
+                try await self.asr.ensureAsrReady()
+            } catch {
+                DebugLogger.shared.error("Failed to prepare model after activation: \(error)", source: "AISettingsView")
+            }
+        }
+    }
+
+    private func downloadSpeechModel(_ model: SettingsStore.SpeechModel) {
+        guard !self.asr.isRunning else { return }
+        let previousActive = SettingsStore.shared.selectedSpeechModel
+
+        Task {
+            await MainActor.run {
+                SettingsStore.shared.selectedSpeechModel = model
+                self.asr.resetTranscriptionProvider()
+            }
+
+            await self.downloadModels()
+
+            if previousActive != model {
+                await MainActor.run {
+                    if SettingsStore.shared.selectedSpeechModel == model {
+                        SettingsStore.shared.selectedSpeechModel = previousActive
+                        self.asr.resetTranscriptionProvider()
+                    }
+                }
+            }
+        }
+    }
+
+    private func deleteSpeechModel(_ model: SettingsStore.SpeechModel) {
+        guard !self.asr.isRunning else { return }
+        let previousActive = SettingsStore.shared.selectedSpeechModel
+
+        Task {
+            await MainActor.run {
+                SettingsStore.shared.selectedSpeechModel = model
+                self.asr.resetTranscriptionProvider()
+            }
+
+            await self.deleteModels()
+
+            if previousActive != model {
+                await MainActor.run {
+                    SettingsStore.shared.selectedSpeechModel = previousActive
+                    self.asr.resetTranscriptionProvider()
+                }
+            }
+        }
+    }
+
+    private func isActiveSpeechModel(_ model: SettingsStore.SpeechModel) -> Bool {
+        SettingsStore.shared.selectedSpeechModel == model
+    }
+
 
     /// Returns the appropriate description text for the currently selected speech model
     private var modelDescriptionText: String {
@@ -346,7 +766,7 @@ struct AISettingsView: View {
 
     private var modelStatusView: some View {
         HStack(spacing: 12) {
-            if self.asr.isDownloadingModel || self.asr.isLoadingModel {
+            if (self.asr.isDownloadingModel || self.asr.isLoadingModel) && !self.asr.isAsrReady {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text(self.asr.isLoadingModel ? "Loading model…" : "Downloading…")
@@ -380,17 +800,16 @@ struct AISettingsView: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                Image(systemName: "arrow.down.circle").foregroundStyle(.orange).font(.caption)
-
                 Button(action: { Task { await self.downloadModels() } }) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.down.circle.fill")
                         Text("Download")
                     }
                     .font(.caption)
-                    .foregroundStyle(self.theme.palette.accent)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(.blue)
             }
         }
         .padding(.horizontal, 12)
@@ -774,52 +1193,22 @@ struct AISettingsView: View {
     private var aiConfigurationCard: some View {
         VStack(spacing: 14) {
             ThemedCard(style: .prominent, hoverEffect: false) {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
                     // Header
                     HStack(spacing: 12) {
                         HStack(spacing: 8) {
-                            Image(systemName: "key.fill")
+                            Image(systemName: "sparkles")
                                 .font(.title3)
                                 .foregroundStyle(self.theme.palette.accent)
-                            Text("API Configuration")
+                            Text("AI Enhancement")
                                 .font(.headline)
                                 .fontWeight(.semibold)
                         }
-
-                        // Compatibility Badge
-                        if self.selectedProviderID == "apple-intelligence" {
-                            HStack(spacing: 4) {
-                                Image(systemName: "apple.logo").font(.caption2)
-                                Text("On-device").font(.caption)
-                            }
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(.quaternary.opacity(0.5)))
-                        } else {
-                            HStack(spacing: 4) {
-                                Image(systemName: "checkmark.seal.fill").font(.caption2)
-                                Text("OpenAI Compatible").font(.caption)
-                            }
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(.quaternary.opacity(0.5)))
-                        }
-
                         Spacer()
-
-                        Button(action: { self.showHelp.toggle() }) {
-                            Image(systemName: self.showHelp ? "questionmark.circle.fill" : "questionmark.circle")
-                                .font(.system(size: 20))
-                                .foregroundStyle(self.theme.palette.accent.opacity(0.8))
-                        }
-                        .buttonStyle(.plain)
+                        Toggle("", isOn: self.$enableAIProcessing)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
                     }
-
-
-                    // AI Enhancement Toggle
-                    self.aiEnhancementToggle
 
                     // Streaming Toggle
                     if self.enableAIProcessing && self.selectedProviderID != "apple-intelligence" {
@@ -839,7 +1228,7 @@ struct AISettingsView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(self.theme.palette.secondaryText)
                         .padding(.leading, 4)
-                        .padding(.top, -4)
+                        .padding(.top, -2)
                     }
 
                     // API Key Warning
@@ -854,31 +1243,59 @@ struct AISettingsView: View {
                     if self.showHelp { self.helpSectionView }
 
 
-                    // Provider/Model Configuration
-                    self.providerConfigurationSection
+                    // Provider/Model Configuration (only shown when AI Enhancement is enabled)
+                    if self.enableAIProcessing {
+                        HStack(spacing: 12) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "key.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(self.theme.palette.accent)
+                                Text("API Configuration")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+
+                            // Compatibility Badge
+                            if self.selectedProviderID == "apple-intelligence" {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "apple.logo").font(.caption2)
+                                    Text("On-device").font(.caption)
+                                }
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(.quaternary.opacity(0.5)))
+                            } else {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark.seal.fill").font(.caption2)
+                                    Text("OpenAI Compatible").font(.caption)
+                                }
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(.quaternary.opacity(0.5)))
+                            }
+
+                            Spacer()
+
+                            Button(action: { self.showHelp.toggle() }) {
+                                Image(systemName: self.showHelp ? "questionmark.circle.fill" : "questionmark.circle")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(self.theme.palette.accent.opacity(0.8))
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        self.providerConfigurationSection
+
+                        self.advancedSettingsCard
+                    }
                 }
                 .padding(14)
             }
             .modifier(CardAppearAnimation(delay: 0.1, appear: self.$appear))
-
-            // Advanced Settings Card
-            self.advancedSettingsCard
         }
     }
-
-    private var aiEnhancementToggle: some View {
-        HStack(alignment: .center, spacing: 16) {
-            Text("Enable AI Enhancement")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(self.theme.palette.primaryText)
-            Spacer()
-            Toggle("", isOn: self.$enableAIProcessing)
-                .toggleStyle(.switch)
-                .labelsHidden()
-        }
-        .padding(.horizontal, 4)
-    }
-
 
     private var apiKeyWarningView: some View {
         HStack(spacing: 10) {
@@ -938,13 +1355,15 @@ struct AISettingsView: View {
             if self.selectedProviderID == "apple-intelligence" { self.appleIntelligenceBadge }
 
             // API Key Management
-            if self.selectedProviderID != "apple-intelligence" {
+                    if self.selectedProviderID != "apple-intelligence" {
                 HStack(spacing: 8) {
                     Button(action: { self.handleAPIKeyButtonTapped() }) {
                         Label("Add or Modify API Key", systemImage: "key.fill")
                             .labelStyle(.titleAndIcon).font(.caption)
                     }
-                    .buttonStyle(GlassButtonStyle())
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(self.theme.palette.accent.opacity(0.8))
 
                     // Get API Key / Download button for built-in providers
                     if let websiteInfo = ModelRepository.shared.providerWebsiteURL(for: self.selectedProviderID),
@@ -1271,6 +1690,17 @@ struct AISettingsView: View {
                     self.availableModelsByProvider[key] = models
                     SettingsStore.shared.availableModelsByProvider = self.availableModelsByProvider
 
+                    if let providerIndex = self.savedProviders.firstIndex(where: { $0.id == self.selectedProviderID }) {
+                        let updatedProvider = SettingsStore.SavedProvider(
+                            id: self.savedProviders[providerIndex].id,
+                            name: self.savedProviders[providerIndex].name,
+                            baseURL: self.savedProviders[providerIndex].baseURL,
+                            models: models
+                        )
+                        self.savedProviders[providerIndex] = updatedProvider
+                        self.saveSavedProviders()
+                    }
+
                     // Select first model if current selection not in list
                     if !models.contains(self.selectedModel) {
                         self.selectedModel = models.first ?? ""
@@ -1421,7 +1851,9 @@ struct AISettingsView: View {
                 Button(action: { Task { await self.testAPIConnection() } }) {
                     Text(self.isTestingConnection ? "Verifying..." : "Verify Connection").font(.caption).fontWeight(.semibold)
                 }
-                .buttonStyle(GlassButtonStyle())
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(self.theme.palette.accent.opacity(0.8))
                 .disabled(self.isTestingConnection || (!self.isLocalEndpoint(self.openAIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)) && (self.providerAPIKeys[self.currentProvider] ?? "").isEmpty))
             }
 

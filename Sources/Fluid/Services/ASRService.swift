@@ -88,6 +88,10 @@ final class ASRService: ObservableObject {
     @Published var isDownloadingModel: Bool = false
     @Published var isLoadingModel: Bool = false // True when loading cached model into memory (not downloading)
     @Published var modelsExistOnDisk: Bool = false
+    @Published var downloadProgress: Double? = nil
+
+    private var downloadProgressTask: Task<Void, Never>?
+    private var hasCompletedFirstTranscription: Bool = false // Track if model has warmed up with first transcription
 
     // MARK: - Error Handling
 
@@ -193,6 +197,9 @@ final class ASRService: ObservableObject {
 
         self.isAsrReady = false
         self.modelsExistOnDisk = false
+        self.downloadProgress = nil
+        self.hasCompletedFirstTranscription = false // Reset warm-up state when switching models
+        self.stopDownloadProgressMonitor()
         self.ensureReadyTask?.cancel()
         self.ensureReadyTask = nil
         self.ensureReadyProviderKey = nil
@@ -460,8 +467,14 @@ final class ASRService: ObservableObject {
                 DebugLogger.shared.debug("ℹ️ No device to monitor", source: "ASRService")
             }
 
-            DebugLogger.shared.debug("📡 Starting streaming transcription...", source: "ASRService")
-            self.startStreamingTranscription()
+            // Only start streaming for models that support it (large Whisper models are too slow)
+            let model = SettingsStore.shared.selectedSpeechModel
+            if model.supportsStreaming {
+                DebugLogger.shared.debug("📡 Starting streaming transcription...", source: "ASRService")
+                self.startStreamingTranscription()
+            } else {
+                DebugLogger.shared.debug("⏸️ Skipping streaming - model '\(model.displayName)' does not support real-time chunk processing", source: "ASRService")
+            }
             DebugLogger.shared.info("✅ START() completed successfully", source: "ASRService")
         } catch {
             DebugLogger.shared.error("Failed to start ASR session: \(error)", source: "ASRService")
@@ -586,6 +599,16 @@ final class ASRService: ObservableObject {
         let pcm = self.audioBuffer.getAll()
         self.audioBuffer.clear()
 
+        // Avoid whisper.cpp assertions by skipping too-short audio buffers
+        let minSamples = 16_000
+        guard pcm.count >= minSamples else {
+            DebugLogger.shared.debug(
+                "stop(): insufficient audio for transcription (\(pcm.count)/\(minSamples) samples)",
+                source: "ASRService"
+            )
+            return ""
+        }
+
         do {
             DebugLogger.shared.debug("🔍 Calling ensureAsrReady()...", source: "ASRService")
             try await self.ensureAsrReady()
@@ -611,6 +634,16 @@ final class ASRService: ObservableObject {
                 "Transcription completed: '\(result.text)' (confidence: \(result.confidence))",
                 source: "ASRService"
             )
+            
+            // Mark first transcription as complete to clear loading state
+            if !self.hasCompletedFirstTranscription {
+                self.hasCompletedFirstTranscription = true
+                DispatchQueue.main.async {
+                    self.isLoadingModel = false
+                    DebugLogger.shared.info("✅ Model warmed up - first transcription completed", source: "ASRService")
+                }
+            }
+            
             // Do not update self.finalText here to avoid instant binding insert in playground
             let cleanedText = ASRService.applyCustomDictionary(ASRService.removeFillerWords(result.text))
             DebugLogger.shared.debug("After post-processing: '\(cleanedText)'", source: "ASRService")
@@ -1604,10 +1637,14 @@ final class ASRService: ObservableObject {
                 if modelsAlreadyCached {
                     self.isLoadingModel = true
                     self.isDownloadingModel = false
+                    self.downloadProgress = nil
+                    self.stopDownloadProgressMonitor()
                     DebugLogger.shared.info("📦 LOADING cached model into memory...", source: "ASRService")
                 } else {
                     self.isDownloadingModel = true
                     self.isLoadingModel = false
+                    self.downloadProgress = nil
+                    self.startParakeetDownloadProgressMonitor()
                     DebugLogger.shared.info("⬇️ DOWNLOADING model...", source: "ASRService")
                 }
             }
@@ -1615,13 +1652,26 @@ final class ASRService: ObservableObject {
             // Use the transcription provider to prepare models
             let downloadStartTime = Date()
             DebugLogger.shared.info("Calling transcriptionProvider.prepare()...", source: "ASRService")
-            try await provider.prepare(progressHandler: nil)
+            try await provider.prepare(progressHandler: { [weak self] progress in
+                DispatchQueue.main.async {
+                    let clamped = max(0.0, min(1.0, progress))
+                    self?.downloadProgress = clamped
+                }
+            })
             let downloadDuration = Date().timeIntervalSince(downloadStartTime)
             DebugLogger.shared.info("✓ Provider preparation completed in \(String(format: "%.1f", downloadDuration)) seconds", source: "ASRService")
 
             DispatchQueue.main.async {
                 self.isDownloadingModel = false
-                self.isLoadingModel = false
+                // Keep isLoadingModel true until first transcription completes (for large models that need warm-up)
+                if !self.hasCompletedFirstTranscription {
+                    self.isLoadingModel = true
+                    DebugLogger.shared.info("⏳ Model loaded, waiting for first transcription to complete...", source: "ASRService")
+                } else {
+                    self.isLoadingModel = false
+                }
+                self.downloadProgress = nil
+                self.stopDownloadProgressMonitor()
                 self.modelsExistOnDisk = true
             }
 
@@ -1636,9 +1686,82 @@ final class ASRService: ObservableObject {
             DispatchQueue.main.async {
                 self.isDownloadingModel = false
                 self.isLoadingModel = false
+                self.downloadProgress = nil
+                self.stopDownloadProgressMonitor()
             }
             throw error
         }
+    }
+
+    private func startParakeetDownloadProgressMonitor() {
+        let model = SettingsStore.shared.selectedSpeechModel
+        guard model == .parakeetTDT || model == .parakeetTDTv2 else { return }
+        guard let modelDir = self.parakeetCacheDirectory(for: model) else { return }
+
+        self.stopDownloadProgressMonitor()
+        self.downloadProgress = 0.0
+
+        let estimatedBytes = self.estimatedParakeetSizeBytes(for: model)
+        self.downloadProgressTask = Task(priority: .background) { [weak self] in
+            guard let self = self else { return }
+            while !Task.isCancelled {
+                let isDownloading = await MainActor.run { self.isDownloadingModel }
+                if !isDownloading { break }
+                let size = self.directorySize(at: modelDir)
+                let pct = estimatedBytes > 0 ? min(0.99, Double(size) / Double(estimatedBytes)) : 0.0
+                await MainActor.run {
+                    self.downloadProgress = max(self.downloadProgress ?? 0.0, pct)
+                }
+                try? await Task.sleep(nanoseconds: 700_000_000)
+            }
+        }
+    }
+
+    private func stopDownloadProgressMonitor() {
+        self.downloadProgressTask?.cancel()
+        self.downloadProgressTask = nil
+    }
+
+    private func parakeetCacheDirectory(for model: SettingsStore.SpeechModel) -> URL? {
+        #if arch(arm64)
+        let baseCacheDir = AsrModels.defaultCacheDirectory().deletingLastPathComponent()
+        let folder = (model == .parakeetTDTv2) ? "parakeet-tdt-0.6b-v2-coreml" : "parakeet-tdt-0.6b-v3-coreml"
+        return baseCacheDir.appendingPathComponent(folder)
+        #else
+        return nil
+        #endif
+    }
+
+    private func estimatedParakeetSizeBytes(for model: SettingsStore.SpeechModel) -> Int64 {
+        // Approximate size for progress display only.
+        switch model {
+        case .parakeetTDT, .parakeetTDTv2:
+            return 520 * 1024 * 1024
+        default:
+            return 0
+        }
+    }
+
+    private func directorySize(at url: URL) -> Int64 {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return 0
+        }
+
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            if let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+               values.isRegularFile == true,
+               let size = values.fileSize
+            {
+                total += Int64(size)
+            }
+        }
+        return total
     }
 
     // MARK: - Model lifecycle helpers (parity with original API)
@@ -1814,6 +1937,15 @@ final class ASRService: ObservableObject {
             )
             let rawText = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
             let newText = ASRService.applyCustomDictionary(ASRService.removeFillerWords(rawText))
+
+            // Mark first transcription as complete to clear loading state
+            if !self.hasCompletedFirstTranscription {
+                self.hasCompletedFirstTranscription = true
+                DispatchQueue.main.async {
+                    self.isLoadingModel = false
+                    DebugLogger.shared.info("✅ Model warmed up - first streaming transcription completed", source: "ASRService")
+                }
+            }
 
             if !newText.isEmpty {
                 // Smart diff: only show truly new words

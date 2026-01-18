@@ -81,6 +81,16 @@ final class WhisperProvider: TranscriptionProvider {
     }
 
     func transcribe(_ samples: [Float]) async throws -> ASRTranscriptionResult {
+        // Whisper.cpp asserts on very short buffers; guard early to avoid abort.
+        let minSamples = 16_000
+        guard samples.count >= minSamples else {
+            throw NSError(
+                domain: "WhisperProvider",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Audio too short for Whisper transcription"]
+            )
+        }
+
         guard let whisper = whisper else {
             throw NSError(
                 domain: "WhisperProvider",
@@ -131,29 +141,11 @@ final class WhisperProvider: TranscriptionProvider {
         let maxAttempts = 3
         for attempt in 1...maxAttempts {
             do {
-                let (tempURL, response) = try await self.urlSession.download(from: url)
-
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    throw NSError(
-                        domain: "WhisperProvider",
-                        code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "Invalid server response"]
-                    )
+                if attempt == 1 {
+                    progressHandler?(0.0)
                 }
 
-                guard httpResponse.statusCode == 200 else {
-                    throw NSError(
-                        domain: "WhisperProvider",
-                        code: httpResponse.statusCode,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to download model (HTTP \(httpResponse.statusCode))"]
-                    )
-                }
-
-                // Move to final location
-                if FileManager.default.fileExists(atPath: self.modelURL.path) {
-                    try FileManager.default.removeItem(at: self.modelURL)
-                }
-                try FileManager.default.moveItem(at: tempURL, to: self.modelURL)
+                try await self.downloadFile(from: url, to: self.modelURL, progressHandler: progressHandler)
 
                 DebugLogger.shared.info("WhisperProvider: Model downloaded successfully", source: "WhisperProvider")
                 return
@@ -198,6 +190,90 @@ final class WhisperProvider: TranscriptionProvider {
                 let delayNanos = UInt64(1_000_000_000) << UInt64(attempt - 1)
                 try await Task.sleep(nanoseconds: delayNanos)
             }
+        }
+    }
+
+    private func downloadFile(from url: URL, to destination: URL, progressHandler: ((Double) -> Void)?) async throws {
+        let delegate = DownloadProgressDelegate(onProgress: progressHandler)
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        let task = session.downloadTask(with: url)
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let lock = NSLock()
+            var didResume = false
+
+            func resumeOnce(_ result: Result<Void, Error>) {
+                lock.lock()
+                defer { lock.unlock() }
+                guard !didResume else { return }
+                didResume = true
+                session.finishTasksAndInvalidate()
+                continuation.resume(with: result)
+            }
+
+            delegate.onFinish = { tempURL, response in
+                do {
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        throw NSError(
+                            domain: "WhisperProvider",
+                            code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: "Invalid server response"]
+                        )
+                    }
+
+                    guard httpResponse.statusCode == 200 else {
+                        throw NSError(
+                            domain: "WhisperProvider",
+                            code: httpResponse.statusCode,
+                            userInfo: [NSLocalizedDescriptionKey: "Failed to download model (HTTP \(httpResponse.statusCode))"]
+                        )
+                    }
+
+                    try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    if FileManager.default.fileExists(atPath: destination.path) {
+                        try FileManager.default.removeItem(at: destination)
+                    }
+                    try FileManager.default.moveItem(at: tempURL, to: destination)
+                    resumeOnce(.success(()))
+                } catch {
+                    resumeOnce(.failure(error))
+                }
+            }
+            delegate.onError = { error in
+                resumeOnce(.failure(error))
+            }
+            task.resume()
+        }
+    }
+
+    private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
+        private let onProgress: ((Double) -> Void)?
+        var onFinish: ((URL, URLResponse) -> Void)?
+        var onError: ((Error) -> Void)?
+
+        init(onProgress: ((Double) -> Void)?) {
+            self.onProgress = onProgress
+        }
+
+        func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+            guard let response = downloadTask.response else { return }
+            self.onFinish?(location, response)
+        }
+
+        func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+            if let error = error { self.onError?(error) }
+        }
+
+        func urlSession(
+            _ session: URLSession,
+            downloadTask: URLSessionDownloadTask,
+            didWriteData bytesWritten: Int64,
+            totalBytesWritten: Int64,
+            totalBytesExpectedToWrite: Int64
+        ) {
+            guard totalBytesExpectedToWrite > 0 else { return }
+            let pct = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+            self.onProgress?(pct)
         }
     }
 }

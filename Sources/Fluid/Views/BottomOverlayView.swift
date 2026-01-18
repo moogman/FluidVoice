@@ -180,6 +180,7 @@ final class BottomOverlayWindowController {
 
 struct BottomOverlayView: View {
     @ObservedObject private var contentState = NotchContentState.shared
+    @ObservedObject private var appServices = AppServices.shared
     @ObservedObject private var settings = SettingsStore.shared
     @State private var showPromptHoverMenu = false
     @State private var promptHoverWorkItem: DispatchWorkItem?
@@ -429,23 +430,42 @@ struct BottomOverlayView: View {
             HStack(spacing: self.layout.hPadding / 1.5) {
                 // Target app icon (the app where text will be typed)
                 if let appIcon = contentState.targetAppIcon {
-                    Image(nsImage: appIcon)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: self.layout.iconSize, height: self.layout.iconSize)
-                        .clipShape(RoundedRectangle(cornerRadius: self.layout.iconSize / 4))
+                    let showModelLoading = !self.appServices.asr.isAsrReady &&
+                        (self.appServices.asr.isLoadingModel || self.appServices.asr.isDownloadingModel)
+                    VStack(spacing: 2) {
+                        if showModelLoading {
+                            ProgressView()
+                                .controlSize(.mini)
+                        }
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: self.layout.iconSize, height: self.layout.iconSize)
+                            .clipShape(RoundedRectangle(cornerRadius: self.layout.iconSize / 4))
+                    }
                 }
 
                 // Waveform visualization
                 BottomWaveformView(color: self.modeColor, layout: self.layout)
                     .frame(width: self.layout.waveformWidth, height: self.layout.waveformHeight)
 
-                // Mode label
-                Text(self.modeLabel)
-                    .font(.system(size: self.layout.modeFontSize, weight: .semibold))
-                    .foregroundStyle(self.modeColor)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                // Mode label + model load hint
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(self.modeLabel)
+                        .font(.system(size: self.layout.modeFontSize, weight: .semibold))
+                        .foregroundStyle(self.modeColor)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+
+                    if !self.appServices.asr.isAsrReady &&
+                        (self.appServices.asr.isLoadingModel || self.appServices.asr.isDownloadingModel)
+                    {
+                        Text("Loading model…")
+                            .font(.system(size: max(self.layout.modeFontSize - 2, 9), weight: .medium))
+                            .foregroundStyle(.orange.opacity(0.85))
+                            .lineLimit(1)
+                    }
+                }
             }
         }
         .padding(.horizontal, self.layout.hPadding)
