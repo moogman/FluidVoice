@@ -634,7 +634,7 @@ final class ASRService: ObservableObject {
                 "Transcription completed: '\(result.text)' (confidence: \(result.confidence))",
                 source: "ASRService"
             )
-            
+
             // Mark first transcription as complete to clear loading state
             if !self.hasCompletedFirstTranscription {
                 self.hasCompletedFirstTranscription = true
@@ -643,7 +643,7 @@ final class ASRService: ObservableObject {
                     DebugLogger.shared.info("✅ Model warmed up - first transcription completed", source: "ASRService")
                 }
             }
-            
+
             // Do not update self.finalText here to avoid instant binding insert in playground
             let cleanedText = ASRService.applyCustomDictionary(ASRService.removeFillerWords(result.text))
             DebugLogger.shared.debug("After post-processing: '\(cleanedText)'", source: "ASRService")

@@ -20,43 +20,41 @@ enum AIConnectionStatus {
 
 /// A gentle wave surface that bobs up and down
 private struct LiquidLayer: Shape {
-    var phase: Double  // Phase offset for this layer
-    var time: Double   // Animation time
-    
+    var phase: Double // Phase offset for this layer
+    var time: Double // Animation time
+
     var animatableData: Double {
-        get { time }
-        set { time = newValue }
+        get { self.time }
+        set { self.time = newValue }
     }
-    
+
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let width = Double(rect.width)
         let height = Double(rect.height)
-        
+
         // Wave surface very close to the top (only 3% offset for wave amplitude)
         let baseY = height * 0.03
-        
+
         path.move(to: CGPoint(x: 0, y: CGFloat(baseY)))
-        
+
         // Create a gentle, organic wave surface
         for x in stride(from: 0.0, through: width, by: 1.0) {
             let normalizedX = x / width
-            
+
             // Slow, gentle wave like water sloshing in a jar
             let waveAmplitude = 2.0
-            let waveFrequency = 1.5  // Lower frequency = broader, more ocean-like waves
-            let y = baseY + sin((normalizedX * waveFrequency + time * 0.25 + phase) * .pi) * waveAmplitude
+            let waveFrequency = 1.5 // Lower frequency = broader, more ocean-like waves
+            let y = baseY + sin((normalizedX * waveFrequency + self.time * 0.25 + self.phase) * .pi) * waveAmplitude
 
-
-            
             path.addLine(to: CGPoint(x: CGFloat(x), y: CGFloat(y)))
         }
-        
+
         // Fill down to bottom
         path.addLine(to: CGPoint(x: CGFloat(width), y: CGFloat(height)))
         path.addLine(to: CGPoint(x: 0, y: CGFloat(height)))
         path.closeSubpath()
-        
+
         return path
     }
 }
@@ -68,22 +66,22 @@ private struct LiquidBar: View {
     let secondaryColor: Color
     let icon: String
     let label: String
-    
+
     // Animated fill level (smoothly transitions between values)
     @State private var animatedFill: Double = 0
-    
+
     var body: some View {
         VStack(spacing: 8) {
             // Label
             HStack(spacing: 4) {
-                Image(systemName: icon)
+                Image(systemName: self.icon)
                     .font(.system(size: 10))
-                    .foregroundStyle(color)
-                Text(label)
+                    .foregroundStyle(self.color)
+                Text(self.label)
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.secondary)
             }
-            
+
             // Liquid Container (Capsule Glass)
             ZStack(alignment: .bottom) {
                 // Background (Empty glass interior)
@@ -100,19 +98,19 @@ private struct LiquidBar: View {
                                 lineWidth: 1.5
                             )
                     )
-                
+
                 // Single clean liquid layer with animated height
                 GeometryReader { geo in
-                    let displayHeight = geo.size.height * CGFloat(animatedFill)
-                    
-                    TimelineView(.animation(minimumInterval: 1.0/30.0)) { timeline in
+                    let displayHeight = geo.size.height * CGFloat(self.animatedFill)
+
+                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
                         let time = timeline.date.timeIntervalSinceReferenceDate
-                        
+
                         // Single organic liquid surface
                         LiquidLayer(phase: 0.0, time: time)
                             .fill(
                                 LinearGradient(
-                                    colors: [color, secondaryColor],
+                                    colors: [self.color, self.secondaryColor],
                                     startPoint: .bottom,
                                     endPoint: .top
                                 )
@@ -123,7 +121,7 @@ private struct LiquidBar: View {
                 }
                 .clipShape(Capsule())
                 .padding(3)
-                
+
                 // Glass highlight (3D glossy effect)
                 Capsule()
                     .fill(
@@ -131,7 +129,7 @@ private struct LiquidBar: View {
                             stops: [
                                 .init(color: .white.opacity(0.25), location: 0),
                                 .init(color: .white.opacity(0.08), location: 0.25),
-                                .init(color: .clear, location: 0.5)
+                                .init(color: .clear, location: 0.5),
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -141,29 +139,25 @@ private struct LiquidBar: View {
                     .allowsHitTesting(false)
             }
             .frame(width: 48, height: 90)
-            
+
             // Percentage (shows target, not animated)
-            Text("\(Int(fillPercent * 100))%")
+            Text("\(Int(self.fillPercent * 100))%")
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(fillPercent > 0 ? color : .secondary)
+                .foregroundStyle(self.fillPercent > 0 ? self.color : .secondary)
                 .contentTransition(.numericText())
         }
         .onAppear {
             // Initialize to target on first appear
-            animatedFill = fillPercent
+            self.animatedFill = self.fillPercent
         }
-        .onChange(of: fillPercent) { _, newValue in
+        .onChange(of: self.fillPercent) { _, newValue in
             // Animate liquid level change with a gentle "sloshing" feel
             withAnimation(.interpolatingSpring(stiffness: 140, damping: 18)) {
-                animatedFill = newValue
+                self.animatedFill = newValue
             }
         }
     }
 }
-
-
-
-
 
 private enum PromptEditorMode: Identifiable, Equatable {
     case defaultPrompt
@@ -629,10 +623,10 @@ struct AISettingsView: View {
                             self.activateSpeechModel(model)
                         }
                         .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                        .controlSize(.small)
                         .tint(.green)
-                    .fontWeight(.semibold)
-                    .shadow(color: .green.opacity(0.35), radius: 4, x: 0, y: 1)
+                        .fontWeight(.semibold)
+                        .shadow(color: .green.opacity(0.35), radius: 4, x: 0, y: 1)
                         .disabled(self.asr.isRunning)
                     }
 
@@ -745,7 +739,6 @@ struct AISettingsView: View {
     private func isActiveSpeechModel(_ model: SettingsStore.SpeechModel) -> Bool {
         SettingsStore.shared.selectedSpeechModel == model
     }
-
 
     /// Returns the appropriate description text for the currently selected speech model
     private var modelDescriptionText: String {
@@ -1218,7 +1211,7 @@ struct AISettingsView: View {
                                 set: { SettingsStore.shared.enableAIStreaming = $0 }
                             ))
                             .toggleStyle(.checkbox)
-                            
+
                             Toggle("Show Thinking Tokens", isOn: Binding(
                                 get: { SettingsStore.shared.showThinkingTokens },
                                 set: { SettingsStore.shared.showThinkingTokens = $0 }
@@ -1241,7 +1234,6 @@ struct AISettingsView: View {
 
                     // Help Section
                     if self.showHelp { self.helpSectionView }
-
 
                     // Provider/Model Configuration (only shown when AI Enhancement is enabled)
                     if self.enableAIProcessing {
@@ -1346,8 +1338,6 @@ struct AISettingsView: View {
 
     private var providerConfigurationSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-
-
             self.providerPickerRow
 
             if self.showingEditProvider { self.editProviderSection }
@@ -1355,7 +1345,7 @@ struct AISettingsView: View {
             if self.selectedProviderID == "apple-intelligence" { self.appleIntelligenceBadge }
 
             // API Key Management
-                    if self.selectedProviderID != "apple-intelligence" {
+            if self.selectedProviderID != "apple-intelligence" {
                 HStack(spacing: 8) {
                     Button(action: { self.handleAPIKeyButtonTapped() }) {
                         Label("Add or Modify API Key", systemImage: "key.fill")
@@ -1378,7 +1368,6 @@ struct AISettingsView: View {
                 }
             }
 
-
             // Model Row
             if self.selectedProviderID == "apple-intelligence" {
                 self.appleIntelligenceModelRow
@@ -1387,7 +1376,6 @@ struct AISettingsView: View {
                 if self.showingAddModel { self.addModelSection }
                 if self.showingReasoningConfig { self.reasoningConfigSection }
             }
-
 
             // Connection Test
             if self.selectedProviderID != "apple-intelligence" {
@@ -1981,7 +1969,6 @@ struct AISettingsView: View {
                         .fontWeight(.semibold)
                     Spacer()
                 }
-
 
                 // Dictation Prompts (multi-prompt system)
                 VStack(alignment: .leading, spacing: 10) {

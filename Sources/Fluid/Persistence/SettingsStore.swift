@@ -1673,7 +1673,7 @@ final class SettingsStore: ObservableObject {
 
         /// Get models filtered by provider
         static func models(for provider: Provider) -> [SpeechModel] {
-            availableModels.filter { $0.provider == provider }
+            self.availableModels.filter { $0.provider == provider }
         }
 
         /// Whether this model is built-in or already downloaded on disk
