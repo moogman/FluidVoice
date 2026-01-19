@@ -38,7 +38,7 @@ struct RewriteModeView: View {
                 .buttonStyle(.plain)
             }
             .padding()
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background(self.theme.palette.windowBackground)
 
             // How To (collapsible)
             self.howToSection
@@ -69,7 +69,7 @@ struct RewriteModeView: View {
                                 Text(self.service.originalText)
                                     .padding()
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color.gray.opacity(0.1))
+                                    .background(self.theme.palette.cardBackground)
                                     .cornerRadius(8)
                                     .textSelection(.enabled)
                             }
@@ -144,6 +144,16 @@ struct RewriteModeView: View {
                 }
                 .padding()
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(self.theme.palette.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(self.theme.palette.cardBorder.opacity(0.45), lineWidth: 1)
+                    )
+            )
 
             Divider()
 
@@ -211,7 +221,7 @@ struct RewriteModeView: View {
                 }
             }
             .padding()
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background(self.theme.palette.windowBackground)
 
             // Thinking view (real-time, during processing)
             if self.service.isProcessing && self.settings.showThinkingTokens && !self.service.streamingThinkingText.isEmpty {
@@ -338,7 +348,7 @@ struct RewriteModeView: View {
                                 .fontWeight(.medium)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.primary.opacity(0.1))
+                                .background(self.theme.palette.cardBackground.opacity(0.8))
                                 .cornerRadius(4)
                             Text("and speak what you want to write.")
                                 .font(.caption)
@@ -381,7 +391,7 @@ struct RewriteModeView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+        .background(self.theme.palette.contentBackground)
     }
 
     private func howToItem(_ text: String) -> some View {
@@ -438,7 +448,7 @@ struct RewriteModeView: View {
                 }
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .background(self.theme.palette.cardBackground.opacity(0.9))
         .cornerRadius(8)
     }
 }

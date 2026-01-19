@@ -9,6 +9,7 @@
 import SwiftUI
 
 struct SearchableProviderPicker: View {
+    @Environment(\.theme) private var theme
     let builtInProviders: [(id: String, name: String)]
     let savedProviders: [SettingsStore.SavedProvider]
     @Binding var selectedProviderID: String
@@ -62,8 +63,14 @@ struct SearchableProviderPicker: View {
             .frame(width: 180, alignment: .leading)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(6)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(self.theme.palette.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(self.theme.palette.cardBorder.opacity(0.35), lineWidth: 1)
+                    )
+            )
         }
         .buttonStyle(.plain)
         .popover(isPresented: self.$isShowingPopover, arrowEdge: .bottom) {
@@ -76,7 +83,14 @@ struct SearchableProviderPicker: View {
                         .textFieldStyle(.plain)
                 }
                 .padding(8)
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(self.theme.palette.contentBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(self.theme.palette.cardBorder.opacity(0.3), lineWidth: 1)
+                        )
+                )
 
                 Divider()
 
@@ -146,7 +160,7 @@ struct SearchableProviderPicker: View {
                 Spacer()
                 if provider.id == self.selectedProviderID {
                     Image(systemName: "checkmark")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(self.theme.palette.accent)
                 }
             }
             .padding(.horizontal, 10)
@@ -154,7 +168,7 @@ struct SearchableProviderPicker: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(provider.id == self.selectedProviderID ? Color.blue.opacity(0.1) : Color.clear)
+        .background(provider.id == self.selectedProviderID ? self.theme.palette.accent.opacity(0.15) : Color.clear)
     }
 }
 

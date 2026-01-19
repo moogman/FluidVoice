@@ -153,7 +153,7 @@ struct CommandModeView: View {
             .help("Ask for confirmation before running commands")
         }
         .padding()
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(self.theme.palette.windowBackground)
         .confirmationDialog(
             "Delete this chat?",
             isPresented: self.$showingClearConfirmation,
@@ -188,7 +188,7 @@ struct CommandModeView: View {
                 .foregroundStyle(self.isHoveringHowTo ? .primary : .secondary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(self.isHoveringHowTo ? Color.primary.opacity(0.05) : Color.clear)
+                .background(self.isHoveringHowTo ? self.theme.palette.cardBackground.opacity(0.6) : Color.clear)
                 .cornerRadius(4)
             }
             .buttonStyle(.plain)
@@ -213,7 +213,7 @@ struct CommandModeView: View {
                                 .fontWeight(.medium)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.primary.opacity(0.1))
+                                .background(self.theme.palette.cardBackground.opacity(0.8))
                                 .cornerRadius(4)
                             Text("to open Command Mode, speak your command, then press again to send.")
                                 .font(.caption)
@@ -256,7 +256,7 @@ struct CommandModeView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+        .background(self.theme.palette.contentBackground)
     }
 
     private func howToItem(_ text: String) -> some View {
@@ -304,6 +304,16 @@ struct CommandModeView: View {
                 }
                 .padding()
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(self.theme.palette.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(self.theme.palette.cardBorder.opacity(0.45), lineWidth: 1)
+                    )
+            )
             .onChange(of: self.service.conversationHistory.count) { _, _ in
                 self.scrollToBottom(proxy)
             }
@@ -365,7 +375,7 @@ struct CommandModeView: View {
                 }
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .background(self.theme.palette.cardBackground.opacity(0.9))
         .cornerRadius(8)
         .frame(maxWidth: 520, alignment: .leading)
     }
@@ -376,7 +386,7 @@ struct CommandModeView: View {
         CommandShimmerText(text: self.currentStepLabel)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+            .background(self.theme.palette.cardBackground.opacity(0.9))
             .cornerRadius(6)
     }
 
@@ -390,7 +400,7 @@ struct CommandModeView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .frame(maxWidth: 520, alignment: .leading)
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+            .background(self.theme.palette.contentBackground.opacity(0.9))
             .cornerRadius(8)
             .drawingGroup() // Flatten to bitmap for faster updates
         // textSelection disabled during streaming - re-enabled in final message
@@ -456,7 +466,7 @@ struct CommandModeView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color(nsColor: .windowBackgroundColor))
+                .background(self.theme.palette.cardBackground)
 
                 Divider()
 
@@ -465,7 +475,7 @@ struct CommandModeView: View {
                     .textSelection(.enabled)
                     .padding(10)
             }
-            .background(Color(nsColor: .textBackgroundColor))
+            .background(self.theme.palette.contentBackground)
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -544,12 +554,12 @@ struct CommandModeView: View {
             Button(action: self.toggleRecording) {
                 Image(systemName: self.asr.isRunning ? "stop.circle.fill" : "mic.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(self.asr.isRunning ? Color.red : Color.accentColor)
+                    .foregroundStyle(self.asr.isRunning ? Color.red : self.theme.palette.accent)
             }
             .buttonStyle(.plain)
         }
         .padding()
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(self.theme.palette.windowBackground)
     }
 
     // MARK: - Actions
@@ -701,6 +711,7 @@ struct ThinkingShimmerLabel: View {
 
 struct MessageBubble: View {
     let message: CommandModeService.Message
+    @Environment(\.theme) private var theme
     @State private var isThinkingExpanded: Bool = false
 
     var body: some View {
@@ -722,7 +733,7 @@ struct MessageBubble: View {
             .font(.system(size: 13))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.accentColor.opacity(0.15))
+            .background(self.theme.palette.accent.opacity(0.15))
             .cornerRadius(10)
             .frame(maxWidth: 380, alignment: .trailing)
     }
@@ -810,7 +821,7 @@ struct MessageBubble: View {
                     .padding(.bottom, 6)
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.4))
+        .background(self.theme.palette.cardBackground.opacity(0.85))
         .cornerRadius(6)
     }
 
@@ -836,7 +847,7 @@ struct MessageBubble: View {
                 .textSelection(.enabled)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(self.theme.palette.contentBackground)
                 .cornerRadius(6)
         }
     }
@@ -892,7 +903,7 @@ struct MessageBubble: View {
                 .frame(maxHeight: 120)
             }
         }
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+        .background(self.theme.palette.cardBackground.opacity(0.85))
         .cornerRadius(6)
     }
 

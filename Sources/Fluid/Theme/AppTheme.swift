@@ -87,14 +87,15 @@ struct AppTheme {
     static func dark(accent: Color) -> AppTheme {
         AppTheme(
             palette: Palette(
-                windowBackground: Color(red: 0.08, green: 0.08, blue: 0.08),
-                contentBackground: Color(red: 0.10, green: 0.10, blue: 0.10),
+                windowBackground: Color(red: 0.07, green: 0.07, blue: 0.07),
+                contentBackground: Color(red: 0.09, green: 0.09, blue: 0.09),
                 sidebarBackground: Color(red: 0.06, green: 0.06, blue: 0.06),
-                cardBackground: Color(red: 0.12, green: 0.12, blue: 0.12),
-                elevatedCardBackground: Color(red: 0.14, green: 0.14, blue: 0.14),
-                toolbarBackground: Color(red: 0.09, green: 0.09, blue: 0.09),
-                cardBorder: Color(nsColor: .separatorColor).opacity(0.25),
-                separator: Color(nsColor: .separatorColor).opacity(0.4),
+                cardBackground: Color(red: 0.08, green: 0.08, blue: 0.08),
+                elevatedCardBackground: Color(red: 0.11, green: 0.11, blue: 0.11),
+                toolbarBackground: Color(red: 0.06, green: 0.06, blue: 0.06),
+
+                cardBorder: Color.white.opacity(0.10),
+                separator: Color.white.opacity(0.16),
                 primaryText: Color(nsColor: .labelColor),
                 secondaryText: Color(nsColor: .secondaryLabelColor),
                 tertiaryText: Color(nsColor: .tertiaryLabelColor),

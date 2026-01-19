@@ -9,6 +9,7 @@
 import SwiftUI
 
 struct SearchableModelPicker: View {
+    @Environment(\.theme) private var theme
     let models: [String]
     @Binding var selectedModel: String
     var onRefresh: (() async -> Void)?
@@ -40,8 +41,14 @@ struct SearchableModelPicker: View {
                 .frame(width: 180, alignment: .leading)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(self.theme.palette.cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(self.theme.palette.cardBorder.opacity(0.35), lineWidth: 1)
+                        )
+                )
             }
             .buttonStyle(.plain)
             .popover(isPresented: self.$isShowingPopover, arrowEdge: .bottom) {
@@ -54,7 +61,14 @@ struct SearchableModelPicker: View {
                             .textFieldStyle(.plain)
                     }
                     .padding(8)
-                    .background(Color(nsColor: .textBackgroundColor))
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(self.theme.palette.contentBackground)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .stroke(self.theme.palette.cardBorder.opacity(0.3), lineWidth: 1)
+                            )
+                    )
 
                     Divider()
 
@@ -93,7 +107,7 @@ struct SearchableModelPicker: View {
                                             Spacer()
                                             if model == self.selectedModel {
                                                 Image(systemName: "checkmark")
-                                                    .foregroundStyle(.blue)
+                                                    .foregroundStyle(self.theme.palette.accent)
                                             }
                                         }
                                         .padding(.horizontal, 10)
@@ -101,7 +115,7 @@ struct SearchableModelPicker: View {
                                         .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
-                                    .background(model == self.selectedModel ? Color.blue.opacity(0.1) : Color.clear)
+                                    .background(model == self.selectedModel ? self.theme.palette.accent.opacity(0.15) : Color.clear)
                                 }
                             }
                         }

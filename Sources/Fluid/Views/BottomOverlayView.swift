@@ -182,6 +182,7 @@ struct BottomOverlayView: View {
     @ObservedObject private var contentState = NotchContentState.shared
     @ObservedObject private var appServices = AppServices.shared
     @ObservedObject private var settings = SettingsStore.shared
+    @Environment(\.theme) private var theme
     @State private var showPromptHoverMenu = false
     @State private var promptHoverWorkItem: DispatchWorkItem?
 
@@ -363,11 +364,11 @@ struct BottomOverlayView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color.black.opacity(0.92))
+        .background(self.theme.palette.cardBackground.opacity(0.95))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                .stroke(self.theme.palette.cardBorder.opacity(0.45), lineWidth: 1)
         )
         .onHover { hovering in
             self.handlePromptHover(hovering)
@@ -381,7 +382,7 @@ struct BottomOverlayView: View {
                 if self.hasTranscription && !self.contentState.isProcessing {
                     Text(self.transcriptionSuffix)
                         .font(.system(size: self.layout.transFontSize, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(self.theme.palette.primaryText.opacity(0.9))
                         .lineLimit(1)
                         .truncationMode(.head)
                 } else if self.contentState.isProcessing {
@@ -398,18 +399,18 @@ struct BottomOverlayView: View {
                     HStack(spacing: 6) {
                         Text("Prompt:")
                             .font(.system(size: self.layout.modeFontSize, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(self.theme.palette.secondaryText.opacity(0.7))
                         Text(self.selectedPromptLabel)
                             .font(.system(size: self.layout.modeFontSize, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.8))
+                            .foregroundStyle(self.theme.palette.primaryText.opacity(0.85))
                             .lineLimit(1)
                         Image(systemName: "chevron.down")
                             .font(.system(size: max(self.layout.modeFontSize - 2, 9), weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(self.theme.palette.secondaryText.opacity(0.7))
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.05))
+                    .background(self.theme.palette.cardBackground.opacity(0.6))
                     .cornerRadius(8)
                     .onHover { hovering in
                         self.handlePromptHover(hovering)
@@ -474,13 +475,16 @@ struct BottomOverlayView: View {
             ZStack {
                 // Solid black background
                 RoundedRectangle(cornerRadius: self.layout.cornerRadius)
-                    .fill(Color.black)
+                    .fill(self.theme.palette.cardBackground)
 
                 // Inner border
                 RoundedRectangle(cornerRadius: self.layout.cornerRadius)
                     .strokeBorder(
                         LinearGradient(
-                            colors: [.white.opacity(0.15), .white.opacity(0.05)],
+                            colors: [
+                                self.theme.palette.cardBorder.opacity(0.6),
+                                self.theme.palette.cardBorder.opacity(0.35),
+                            ],
                             startPoint: .top,
                             endPoint: .bottom
                         ),

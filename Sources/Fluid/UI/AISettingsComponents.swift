@@ -50,6 +50,7 @@ struct LiquidLayer: Shape {
 
 /// A vertical liquid-filled bar with animated fill level
 struct LiquidBar: View {
+    @Environment(\.theme) private var theme
     let fillPercent: Double
     let color: Color
     let secondaryColor: Color
@@ -75,12 +76,15 @@ struct LiquidBar: View {
             ZStack(alignment: .bottom) {
                 // Background (Empty glass interior)
                 Capsule()
-                    .fill(Color.black.opacity(0.35))
+                    .fill(self.theme.palette.cardBackground.opacity(0.9))
                     .overlay(
                         Capsule()
                             .strokeBorder(
                                 LinearGradient(
-                                    colors: [.white.opacity(0.25), .white.opacity(0.05)],
+                                    colors: [
+                                        self.theme.palette.cardBorder.opacity(0.55),
+                                        self.theme.palette.cardBorder.opacity(0.25),
+                                    ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),

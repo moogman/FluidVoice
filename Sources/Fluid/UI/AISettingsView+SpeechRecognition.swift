@@ -32,11 +32,12 @@ extension AISettingsView {
                     .padding(12)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(.white.opacity(0.04))
+                            .fill(self.theme.palette.contentBackground.opacity(0.6))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(.white.opacity(0.08), lineWidth: 1)
+                                    .stroke(self.theme.palette.cardBorder.opacity(0.3), lineWidth: 1)
                             )
+                            .shadow(color: self.theme.metrics.cardShadow.color.opacity(self.theme.metrics.cardShadow.opacity), radius: self.theme.metrics.cardShadow.radius, x: self.theme.metrics.cardShadow.x, y: self.theme.metrics.cardShadow.y)
                     )
 
                 HStack(spacing: 6) {
@@ -66,10 +67,10 @@ extension AISettingsView {
                         .padding(.vertical, 6)
                         .background(
                             RoundedRectangle(cornerRadius: 9)
-                                .fill(.white.opacity(0.08))
+                                .fill(self.theme.palette.cardBackground.opacity(0.8))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 9)
-                                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                                        .stroke(self.theme.palette.cardBorder.opacity(0.5), lineWidth: 1)
                                 )
                         )
                     }
@@ -90,10 +91,10 @@ extension AISettingsView {
                         .padding(.vertical, 6)
                         .background(
                             RoundedRectangle(cornerRadius: 9)
-                                .fill(.white.opacity(0.08))
+                                .fill(self.theme.palette.cardBackground.opacity(0.8))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 9)
-                                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                                        .stroke(self.theme.palette.cardBorder.opacity(0.5), lineWidth: 1)
                                 )
                         )
                     }
@@ -126,11 +127,12 @@ extension AISettingsView {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(.white.opacity(0.04))
+                        .fill(self.theme.palette.cardBackground.opacity(0.9))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(.white.opacity(0.08), lineWidth: 1)
+                                .stroke(self.theme.palette.cardBorder.opacity(0.3), lineWidth: 1)
                         )
+                        .shadow(color: self.theme.metrics.cardShadow.color.opacity(self.theme.metrics.cardShadow.opacity), radius: self.theme.metrics.cardShadow.radius, x: self.theme.metrics.cardShadow.x, y: self.theme.metrics.cardShadow.y)
                 )
 
                 Divider().padding(.vertical, 4)
@@ -270,11 +272,11 @@ extension AISettingsView {
         return HStack(alignment: .top, spacing: 10) {
             // Selection indicator
             Circle()
-                .fill(isSelected ? Color.fluidGreen : .white.opacity(0.1))
+                .fill(isSelected ? Color.fluidGreen : self.theme.palette.cardBorder.opacity(0.25))
                 .frame(width: 8, height: 8)
                 .overlay(
                     Circle()
-                        .stroke(isSelected ? Color.fluidGreen : .white.opacity(0.3), lineWidth: 1)
+                        .stroke(isSelected ? Color.fluidGreen : self.theme.palette.cardBorder.opacity(0.5), lineWidth: 1)
                 )
 
             // Brand logo/badge - fixed size container for consistency
@@ -422,10 +424,10 @@ extension AISettingsView {
         .animation(.easeInOut(duration: 0.2), value: isSelected)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? .white.opacity(0.05) : .clear)
+                .fill(isSelected ? self.theme.palette.cardBackground.opacity(0.8) : .clear)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSelected ? .white.opacity(0.25) : .white.opacity(0.05), lineWidth: 1)
+                        .stroke(isSelected ? self.theme.palette.cardBorder.opacity(0.6) : self.theme.palette.cardBorder.opacity(0.25), lineWidth: 1)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
@@ -592,8 +594,8 @@ extension AISettingsView {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 8)
-            .fill(.ultraThinMaterial.opacity(0.3))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.1), lineWidth: 1)))
+            .fill(self.theme.palette.cardBackground.opacity(0.8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(self.theme.palette.cardBorder.opacity(0.5), lineWidth: 1)))
     }
 
     var fillerWordsSection: some View {

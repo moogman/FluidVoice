@@ -373,12 +373,12 @@ struct WelcomeView: View {
                                 .background(
                                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                                         .fill(
-                                            self.asr.isRunning ? self.theme.palette.accent.opacity(0.06) : Color(nsColor: NSColor.textBackgroundColor)
+                                            self.asr.isRunning ? self.theme.palette.accent.opacity(0.06) : self.theme.palette.cardBackground
                                         )
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                                 .strokeBorder(
-                                                    self.asr.isRunning ? self.theme.palette.accent.opacity(0.4) : Color(nsColor: NSColor.separatorColor),
+                                                    self.asr.isRunning ? self.theme.palette.accent.opacity(0.4) : self.theme.palette.cardBorder.opacity(0.6),
                                                     lineWidth: self.asr.isRunning ? 2 : 1
                                                 )
                                         )
@@ -489,7 +489,7 @@ struct WelcomeView: View {
             .font(.caption.weight(.medium))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Color.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .background(self.theme.palette.cardBackground.opacity(0.7), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
     }
 
     private func commandModeExample(icon: String, text: String) -> some View {

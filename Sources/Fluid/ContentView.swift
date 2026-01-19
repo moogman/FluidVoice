@@ -739,10 +739,12 @@ struct ContentView: View {
     private var detailView: some View {
         ZStack {
             self.theme.palette.windowBackground
+                .opacity(0.98)
                 .ignoresSafeArea()
 
             Rectangle()
                 .fill(self.theme.materials.window)
+                .opacity(0.75)
                 .ignoresSafeArea()
 
             self.detailContent

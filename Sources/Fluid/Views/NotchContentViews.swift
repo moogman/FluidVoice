@@ -234,6 +234,7 @@ struct NotchExpandedView: View {
     let audioPublisher: AnyPublisher<CGFloat, Never>
     @ObservedObject private var contentState = NotchContentState.shared
     @ObservedObject private var settings = SettingsStore.shared
+    @Environment(\.theme) private var theme
     @State private var showPromptHoverMenu = false
     @State private var promptHoverWorkItem: DispatchWorkItem?
 
@@ -340,11 +341,11 @@ struct NotchExpandedView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color.black.opacity(0.92))
+        .background(self.theme.palette.cardBackground.opacity(0.95))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                .stroke(self.theme.palette.cardBorder.opacity(0.45), lineWidth: 1)
         )
         .onHover { hovering in
             self.handlePromptHover(hovering)
@@ -387,18 +388,18 @@ struct NotchExpandedView: View {
                     HStack(spacing: 6) {
                         Text("Prompt:")
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(self.theme.palette.secondaryText.opacity(0.7))
                         Text(self.selectedPromptLabel)
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.75))
+                            .foregroundStyle(self.theme.palette.primaryText.opacity(0.85))
                             .lineLimit(1)
                         Image(systemName: "chevron.down")
                             .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(self.theme.palette.secondaryText.opacity(0.7))
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.04))
+                    .background(self.theme.palette.cardBackground.opacity(0.6))
                     .cornerRadius(6)
                     .onHover { hovering in
                         self.handlePromptHover(hovering)
@@ -419,7 +420,7 @@ struct NotchExpandedView: View {
             if self.hasTranscription && !self.contentState.isProcessing {
                 Text(self.contentState.cachedLine2)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(self.theme.palette.secondaryText.opacity(0.8))
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: 180)
@@ -428,7 +429,7 @@ struct NotchExpandedView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color.black)
+        .background(self.theme.palette.windowBackground)
         .contentShape(Rectangle()) // Make entire area tappable
         .onTapGesture {
             // If in command mode with history, clicking expands the conversation
@@ -622,6 +623,7 @@ struct NotchCommandOutputExpandedView: View {
     let onClearChat: () -> Void
 
     @ObservedObject private var contentState = NotchContentState.shared
+    @Environment(\.theme) private var theme
     @State private var inputText: String = ""
     @FocusState private var isInputFocused: Bool
     @State private var scrollProxy: ScrollViewProxy?
@@ -676,7 +678,7 @@ struct NotchCommandOutputExpandedView: View {
             self.inputArea
         }
         .frame(width: 380, height: self.dynamicHeight)
-        .background(Color.black)
+        .background(self.theme.palette.windowBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: self.contentState.commandConversationHistory.count)
         // No animation on streamingText - it updates too frequently, animations add overhead
@@ -806,7 +808,7 @@ struct NotchCommandOutputExpandedView: View {
 
                 // Vertical divider
                 Rectangle()
-                    .fill(.white.opacity(0.15))
+                    .fill(self.theme.palette.cardBorder.opacity(0.6))
                     .frame(width: 1, height: 14)
                     .padding(.horizontal, 2)
 
@@ -930,7 +932,7 @@ struct NotchCommandOutputExpandedView: View {
                 Spacer()
                 Text(message.content)
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.9))
+                    .foregroundStyle(self.theme.palette.primaryText)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(self.commandRed.opacity(0.25))
@@ -941,10 +943,10 @@ struct NotchCommandOutputExpandedView: View {
             case .assistant:
                 Text(message.content)
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(self.theme.palette.primaryText.opacity(0.9))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.08))
+                    .background(self.theme.palette.cardBackground.opacity(0.9))
                     .cornerRadius(8)
                     .frame(maxWidth: 320, alignment: .leading)
                     .textSelection(.enabled)
@@ -969,10 +971,10 @@ struct NotchCommandOutputExpandedView: View {
         HStack(alignment: .top) {
             Text(self.contentState.commandStreamingText)
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(self.theme.palette.primaryText.opacity(0.9))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color.white.opacity(0.08))
+                .background(self.theme.palette.cardBackground.opacity(0.9))
                 .cornerRadius(8)
                 .frame(maxWidth: 320, alignment: .leading)
                 .drawingGroup() // Flatten to bitmap for faster streaming updates
@@ -1008,10 +1010,10 @@ struct NotchCommandOutputExpandedView: View {
             TextField("Ask follow-up...", text: self.$inputText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 11))
-                .foregroundStyle(.white)
+                .foregroundStyle(self.theme.palette.primaryText)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color.white.opacity(0.08))
+                .background(self.theme.palette.contentBackground)
                 .cornerRadius(8)
                 .focused(self.$isInputFocused)
                 .onSubmit {
@@ -1028,7 +1030,7 @@ struct NotchCommandOutputExpandedView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.03))
+        .background(self.theme.palette.cardBackground.opacity(0.75))
     }
 
     private func submitFollowUp() {

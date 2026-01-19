@@ -188,10 +188,10 @@ extension AISettingsView {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial.opacity(0.25))
+                .fill(self.theme.palette.cardBackground.opacity(0.7))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(isSelected ? self.theme.palette.accent.opacity(0.55) : .white.opacity(0.12), lineWidth: 1)
+                        .stroke(isSelected ? self.theme.palette.accent.opacity(0.55) : self.theme.palette.cardBorder.opacity(0.35), lineWidth: 1)
                 )
         )
     }
@@ -241,10 +241,10 @@ extension AISettingsView {
                 .frame(minHeight: 180)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(.ultraThinMaterial.opacity(0.25))
+                        .fill(self.theme.palette.contentBackground.opacity(0.7))
                         .overlay(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(.white.opacity(0.12), lineWidth: 1)
+                                .stroke(self.theme.palette.cardBorder.opacity(0.35), lineWidth: 1)
                         )
                 )
                 .onChange(of: self.draftPromptText) { _, newValue in
@@ -325,10 +325,10 @@ extension AISettingsView {
                         .scrollContentBackground(.hidden)
                         .background(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(.ultraThinMaterial.opacity(0.25))
+                                .fill(self.theme.palette.contentBackground.opacity(0.7))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                                        .stroke(self.theme.palette.cardBorder.opacity(0.35), lineWidth: 1)
                                 )
                         )
                     }
@@ -346,10 +346,10 @@ extension AISettingsView {
                         .scrollContentBackground(.hidden)
                         .background(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(.ultraThinMaterial.opacity(0.25))
+                                .fill(self.theme.palette.contentBackground.opacity(0.7))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                                        .stroke(self.theme.palette.cardBorder.opacity(0.35), lineWidth: 1)
                                 )
                         )
                     }
@@ -361,7 +361,7 @@ extension AISettingsView {
                     .fill(self.theme.palette.accent.opacity(0.06))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(.white.opacity(0.10), lineWidth: 1)
+                            .stroke(self.theme.palette.cardBorder.opacity(0.5), lineWidth: 1)
                     )
             )
 
