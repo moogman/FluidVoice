@@ -358,7 +358,8 @@ final class GlobalHotkeyManager: NSObject {
 
         case .keyUp:
             // Command mode key up (press and hold mode)
-            if self.commandModeShortcutEnabled, self.pressAndHoldMode, self.isCommandModeKeyPressed, self.matchesCommandModeShortcut(keyCode: keyCode, modifiers: eventModifiers) {
+            // Note: Only check keyCode, not modifiers - user may release modifier before/with main key
+            if self.commandModeShortcutEnabled, self.pressAndHoldMode, self.isCommandModeKeyPressed, keyCode == self.commandModeShortcut.keyCode {
                 self.isCommandModeKeyPressed = false
                 DebugLogger.shared.info("Command mode shortcut released (hold mode) - stopping", source: "GlobalHotkeyManager")
                 self.stopRecordingIfNeeded()
@@ -366,7 +367,8 @@ final class GlobalHotkeyManager: NSObject {
             }
 
             // Rewrite mode key up (press and hold mode)
-            if self.rewriteModeShortcutEnabled, self.pressAndHoldMode, self.isRewriteKeyPressed, self.matchesRewriteModeShortcut(keyCode: keyCode, modifiers: eventModifiers) {
+            // Note: Only check keyCode, not modifiers - user may release modifier before/with main key
+            if self.rewriteModeShortcutEnabled, self.pressAndHoldMode, self.isRewriteKeyPressed, keyCode == self.rewriteModeShortcut.keyCode {
                 self.isRewriteKeyPressed = false
                 DebugLogger.shared.info("Rewrite mode shortcut released (hold mode) - stopping", source: "GlobalHotkeyManager")
                 self.stopRecordingIfNeeded()
@@ -374,7 +376,8 @@ final class GlobalHotkeyManager: NSObject {
             }
 
             // Transcription key up
-            if self.pressAndHoldMode, self.isKeyPressed, self.matchesShortcut(keyCode: keyCode, modifiers: eventModifiers) {
+            // Note: Only check keyCode, not modifiers - user may release modifier before/with main key
+            if self.pressAndHoldMode, self.isKeyPressed, keyCode == self.shortcut.keyCode {
                 self.isKeyPressed = false
                 self.stopRecordingIfNeeded()
                 return nil
