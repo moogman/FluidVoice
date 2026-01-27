@@ -444,7 +444,7 @@ struct WelcomeView: View {
             // This prevents the Quick Setup from showing stale status before ASRService.initialize() runs
             Task { @MainActor in
                 // Check microphone status without triggering the full initialize() delay
-                self.asr.micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+                self.asr.refreshMicStatus()
 
                 // Check if models exist on disk (async for accurate detection with AppleSpeechAnalyzerProvider)
                 await self.asr.checkIfModelsExistAsync()

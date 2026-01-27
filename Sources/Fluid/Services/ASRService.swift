@@ -340,6 +340,29 @@ final class ASRService: ObservableObject {
     private var inputFormat: AVAudioFormat?
     private var micPermissionGranted = false
 
+    private func currentMicAuthorizationStatus() -> AVAuthorizationStatus {
+        if #available(macOS 14.0, *) {
+            switch AVAudioApplication.shared.recordPermission {
+            case .granted:
+                return .authorized
+            case .denied:
+                return .denied
+            case .undetermined:
+                return .notDetermined
+            @unknown default:
+                return .notDetermined
+            }
+        }
+
+        return AVCaptureDevice.authorizationStatus(for: .audio)
+    }
+
+    func refreshMicStatus() {
+        let status = self.currentMicAuthorizationStatus()
+        self.micStatus = status
+        self.micPermissionGranted = (status == .authorized)
+    }
+
     // Internal access for MeetingTranscriptionService to share models
     // Note: Only available when using FluidAudioProvider (Apple Silicon)
     #if arch(arm64)
@@ -402,8 +425,7 @@ final class ASRService: ObservableObject {
     /// This must be called from onAppear or later, never during init.
     func initialize() {
         // Check microphone permission (deferred from init to avoid AVFCapture race condition)
-        self.micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-        self.micPermissionGranted = (self.micStatus == .authorized)
+        self.refreshMicStatus()
 
         self.registerDefaultDeviceChangeListener()
         self.registerDeviceListChangeListener()
@@ -465,11 +487,27 @@ final class ASRService: ObservableObject {
     }
 
     func requestMicAccess() {
-        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
-            guard let self = self else { return }
-            Task { @MainActor in
-                self.micPermissionGranted = granted
-                self.micStatus = granted ? .authorized : .denied
+        NSApp.activate(ignoringOtherApps: true)
+
+        if #available(macOS 14.0, *) {
+            let permission = AVAudioApplication.shared.recordPermission
+            guard permission == .undetermined else {
+                self.refreshMicStatus()
+                return
+            }
+
+            AVAudioApplication.requestRecordPermission { [weak self] _ in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    self.refreshMicStatus()
+                }
+            }
+        } else {
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] _ in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    self.refreshMicStatus()
+                }
             }
         }
     }
