@@ -25,9 +25,8 @@ class NotchContentState: ObservableObject {
     /// Captured at recording start to keep the target stable for the session.
     @Published var recordingTargetPID: pid_t? = nil
 
-    // Cached transcription lines to avoid recomputing on every render
-    @Published private(set) var cachedLine1: String = ""
-    @Published private(set) var cachedLine2: String = ""
+    // Cached transcription preview text to avoid recomputing on every render
+    @Published private(set) var cachedPreviewText: String = ""
 
     // MARK: - Expanded Command Output State
 
@@ -60,7 +59,17 @@ class NotchContentState: ObservableObject {
     // Callback for submitting follow-up commands from the notch
     var onSubmitFollowUp: ((String) async -> Void)?
 
-    private init() {}
+    private var cancellables = Set<AnyCancellable>()
+
+
+    private init() {
+        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.recomputeTranscriptionLines()
+            }
+            .store(in: &cancellables)
+    }
 
     /// Set AI processing state
     func setProcessing(_ processing: Bool) {
@@ -79,28 +88,12 @@ class NotchContentState: ObservableObject {
         let text = self.transcriptionText
 
         guard !text.isEmpty else {
-            self.cachedLine1 = ""
-            self.cachedLine2 = ""
+            self.cachedPreviewText = ""
             return
         }
 
-        // Show last ~100 characters
-        let maxChars = 100
-        let displayText = text.count > maxChars ? String(text.suffix(maxChars)) : text
-
-        // Split into words
-        let words = displayText.split(separator: " ").map(String.init)
-
-        if words.count <= 6 {
-            // Short: only line 2
-            self.cachedLine1 = ""
-            self.cachedLine2 = displayText
-        } else {
-            // Long: split roughly in half
-            let midPoint = words.count / 2
-            self.cachedLine1 = words[..<midPoint].joined(separator: " ")
-            self.cachedLine2 = words[midPoint...].joined(separator: " ")
-        }
+        let maxChars = SettingsStore.shared.transcriptionPreviewCharLimit
+        self.cachedPreviewText = text.count > maxChars ? String(text.suffix(maxChars)) : text
     }
 
     // MARK: - Recording State for Expanded View
@@ -281,6 +274,10 @@ struct NotchExpandedView: View {
         return "Default"
     }
 
+    private var previewMaxHeight: CGFloat {
+        60
+    }
+
     private func handlePromptHover(_ hovering: Bool) {
         self.promptHoverWorkItem?.cancel()
         let task = DispatchWorkItem {
@@ -416,15 +413,34 @@ struct NotchExpandedView: View {
                 .transition(.opacity)
             }
 
-            // Transcription preview (single line, minimal)
+            // Transcription preview (wrapped, fixed width)
             if self.hasTranscription && !self.contentState.isProcessing {
-                Text(self.contentState.cachedLine2)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.75))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: 180)
+                let previewText = self.contentState.cachedPreviewText
+                if !previewText.isEmpty {
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            Text(previewText)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Color.clear.frame(height: 1).id("bottom")
+                        }
+                        .frame(maxWidth: 180, maxHeight: self.previewMaxHeight, alignment: .leading)
+                        .clipped()
+                        .onAppear {
+                            DispatchQueue.main.async {
+                                proxy.scrollTo("bottom", anchor: .bottom)
+                            }
+                        }
+                        .onChange(of: previewText) { _, _ in
+                            DispatchQueue.main.async {
+                                proxy.scrollTo("bottom", anchor: .bottom)
+                            }
+                        }
+                    }
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
             }
         }
         .padding(.horizontal, 8)
@@ -634,6 +650,10 @@ struct NotchCommandOutputExpandedView: View {
 
     private let commandRed = Color(red: 1.0, green: 0.35, blue: 0.35)
 
+    private var previewMaxHeight: CGFloat {
+        70
+    }
+
     // Dynamic height based on content (max half screen)
     private var dynamicHeight: CGFloat {
         let baseHeight: CGFloat = 120 // Minimum height
@@ -841,23 +861,35 @@ struct NotchCommandOutputExpandedView: View {
     private var transcriptionPreview: some View {
         Group {
             if self.contentState.isRecordingInExpandedMode && !self.contentState.transcriptionText.isEmpty {
-                VStack(spacing: 2) {
-                    if !self.contentState.cachedLine1.isEmpty {
-                        Text(self.contentState.cachedLine1)
-                            .font(.system(size: 10, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.5))
-                            .lineLimit(1)
+                let previewText = self.contentState.cachedPreviewText
+                if !previewText.isEmpty {
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            Text(previewText)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Color.clear.frame(height: 1).id("bottom")
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: self.previewMaxHeight)
+                        .clipped()
+                        .onAppear {
+                            DispatchQueue.main.async {
+                                proxy.scrollTo("bottom", anchor: .bottom)
+                            }
+                        }
+                        .onChange(of: previewText) { _, _ in
+                            DispatchQueue.main.async {
+                                proxy.scrollTo("bottom", anchor: .bottom)
+                            }
+                        }
                     }
-                    Text(self.contentState.cachedLine2)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(1)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(self.commandRed.opacity(0.1))
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(self.commandRed.opacity(0.1))
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
         .animation(.easeInOut(duration: 0.2), value: self.contentState.isRecordingInExpandedMode)

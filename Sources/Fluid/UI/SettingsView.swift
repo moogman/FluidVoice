@@ -854,6 +854,39 @@ struct SettingsView: View {
                                 .frame(width: 170, alignment: .trailing)
                             }
 
+                            Divider().padding(.vertical, 8)
+
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Transcription Preview Length")
+                                        .font(.body)
+                                    Text("How many recent characters appear in the notch/pill preview")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                HStack(spacing: 6) {
+                                    Slider(
+                                        value: Binding(
+                                            get: { Double(self.settings.transcriptionPreviewCharLimit) },
+                                            set: { self.settings.transcriptionPreviewCharLimit = Int($0.rounded()) }
+                                        ),
+                                        in: 40...2000,
+                                        step: 10
+                                    )
+                                    .frame(width: 110)
+                                    .controlSize(.small)
+
+                                    Text("\(self.settings.transcriptionPreviewCharLimit) chars")
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 90, alignment: .trailing)
+                                }
+                                .frame(width: 200, alignment: .trailing)
+                            }
+
                             // Bottom overlay specific settings (only show when bottom is selected)
                             if self.settings.overlayPosition == .bottom {
                                 Divider().padding(.vertical, 4)

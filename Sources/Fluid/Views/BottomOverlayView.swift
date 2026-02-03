@@ -89,6 +89,10 @@ final class BottomOverlayWindowController {
         NotchContentState.shared.setProcessing(processing)
     }
 
+    func refreshSizeForContent() {
+        self.updateSizeAndPosition()
+    }
+
     /// Update window size based on current SwiftUI content and re-position
     private func updateSizeAndPosition() {
         guard let window = window, let hostingView = window.contentView as? NSHostingView<BottomOverlayView> else { return }
@@ -297,11 +301,16 @@ struct BottomOverlayView: View {
         return "Default"
     }
 
-    // Show last ~60 characters of transcription on single line
-    private var transcriptionSuffix: String {
-        let text = self.contentState.transcriptionText
-        let maxChars = 60
-        return text.count > maxChars ? "..." + String(text.suffix(maxChars)) : text
+    private var previewMaxHeight: CGFloat {
+        self.layout.transFontSize * 4.2
+    }
+
+    private var transcriptionVerticalPadding: CGFloat {
+        max(4, self.layout.vPadding / 2)
+    }
+
+    private var transcriptionPreviewText: String {
+        self.contentState.cachedPreviewText
     }
 
     private func handlePromptHover(_ hovering: Bool) {
@@ -377,21 +386,45 @@ struct BottomOverlayView: View {
 
     var body: some View {
         VStack(spacing: self.layout.vPadding / 2) {
-            // Transcription text area (single line)
+            // Transcription text area (wrapped)
             Group {
                 if self.hasTranscription && !self.contentState.isProcessing {
-                    Text(self.transcriptionSuffix)
-                        .font(.system(size: self.layout.transFontSize, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(1)
-                        .truncationMode(.head)
+                    let previewText = self.transcriptionPreviewText
+                    if !previewText.isEmpty {
+                        ScrollViewReader { proxy in
+                            ScrollView(.vertical, showsIndicators: false) {
+                                Text(previewText)
+                                    .font(.system(size: self.layout.transFontSize, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Color.clear.frame(height: 1).id("bottom")
+                            }
+                            .frame(maxWidth: self.layout.waveformWidth * 2.2, maxHeight: self.previewMaxHeight)
+                            .clipped()
+                            .onAppear {
+                                DispatchQueue.main.async {
+                                    proxy.scrollTo("bottom", anchor: .bottom)
+                                }
+                            }
+                            .onChange(of: previewText) { _, _ in
+                                DispatchQueue.main.async {
+                                    proxy.scrollTo("bottom", anchor: .bottom)
+                                }
+                            }
+                        }
+                        .padding(.vertical, self.transcriptionVerticalPadding)
+                    }
                 } else if self.contentState.isProcessing {
                     Text(self.processingLabel)
                         .font(.system(size: self.layout.transFontSize, weight: .medium))
                         .foregroundStyle(self.modeColor.opacity(0.8))
                 }
             }
-            .frame(maxWidth: self.layout.waveformWidth * 2.2, minHeight: self.hasTranscription || self.contentState.isProcessing ? self.layout.transFontSize * 1.5 : 0)
+            .frame(
+                maxWidth: self.layout.waveformWidth * 2.2,
+                minHeight: self.hasTranscription || self.contentState.isProcessing ? self.layout.transFontSize * 1.5 : 0
+            )
 
             // Dictation prompt selector (only in dictation mode)
             if self.isDictationMode && !self.contentState.isProcessing {
@@ -471,6 +504,12 @@ struct BottomOverlayView: View {
         }
         .padding(.horizontal, self.layout.hPadding)
         .padding(.vertical, self.layout.vPadding)
+        .onChange(of: self.contentState.cachedPreviewText) { _, _ in
+            BottomOverlayWindowController.shared.refreshSizeForContent()
+        }
+        .onChange(of: self.contentState.isProcessing) { _, _ in
+            BottomOverlayWindowController.shared.refreshSizeForContent()
+        }
         .background(
             ZStack {
                 // Solid pitch black background

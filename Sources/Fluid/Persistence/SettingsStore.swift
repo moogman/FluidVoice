@@ -98,6 +98,7 @@ final class SettingsStore: ObservableObject {
         static let overlayPosition = "OverlayPosition"
         static let overlayBottomOffset = "OverlayBottomOffset"
         static let overlaySize = "OverlaySize"
+        static let transcriptionPreviewCharLimit = "TranscriptionPreviewCharLimit"
 
         // Media Playback Control
         static let pauseMediaDuringTranscription = "PauseMediaDuringTranscription"
@@ -676,6 +677,20 @@ final class SettingsStore: ObservableObject {
 
             // Post notification for live update if overlay is visible
             NotificationCenter.default.post(name: NSNotification.Name("OverlaySizeChanged"), object: nil)
+        }
+    }
+
+    /// How many recent transcription characters show in overlays (default: 140)
+    var transcriptionPreviewCharLimit: Int {
+        get {
+            let stored = self.defaults.object(forKey: Keys.transcriptionPreviewCharLimit) as? NSNumber
+            let value = stored?.intValue ?? 140
+            return max(40, min(2000, value))
+        }
+        set {
+            objectWillChange.send()
+            let clamped = max(40, min(2000, newValue))
+            self.defaults.set(clamped, forKey: Keys.transcriptionPreviewCharLimit)
         }
     }
 
