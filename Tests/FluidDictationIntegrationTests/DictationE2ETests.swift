@@ -47,6 +47,18 @@ final class DictationE2ETests: XCTestCase {
         }
     }
 
+    func testPIDUnicodeChunkSelector_usesChunkSizeOneOnMacOS14() {
+        XCTAssertEqual(TypingService.pidUnicodeChunkSize(osMajorVersion: 14), 16)
+    }
+
+    func testPIDUnicodeChunkSelector_usesBulkOnMacOS15() {
+        XCTAssertEqual(TypingService.pidUnicodeChunkSize(osMajorVersion: 15), 0)
+    }
+
+    func testSpeechModelRequiresMacOS15_appleSpeechDoesNotRequireMacOS15() {
+        XCTAssertFalse(SettingsStore.SpeechModel.appleSpeech.requiresMacOS15)
+    }
+
     func testDictationEndToEnd_whisperTiny_transcribesFixture() async throws {
         // Arrange
         SettingsStore.shared.shareAnonymousAnalytics = false

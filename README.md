@@ -113,7 +113,7 @@ Whisper supports up to 99 languages, depending on the model size you choose.
 
 ## Requirements
 
-- macOS 15.0 (Sequoia) or later
+- macOS 14.0 (Sonoma) or later
 - Apple Silicon Mac (M1, M2, M3, M4)
 - Intel Macs are supported from 1.5.1 builds using Whisper models!
 - Microphone access

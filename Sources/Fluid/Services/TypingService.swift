@@ -4,6 +4,16 @@ import Carbon.HIToolbox
 import Foundation
 
 final class TypingService {
+    /// PID unicode chunk size by OS major version.
+    /// 0 means "send full text in one bulk event pair".
+    static func pidUnicodeChunkSize(osMajorVersion: Int) -> Int {
+        if osMajorVersion <= 14 {
+            //  Manual testing showed chunk sizes of 20 works, so setting to 16 to give extra headroom. Without this, macOS 14 would just print "a".
+            return 16
+        }
+        return 0
+    }
+
     // Logging toggle (off by default). Enable by setting env FLUID_TYPING_LOGS=1
     // or UserDefaults bool for key "enableTypingLogs".
     private static var isLoggingEnabled: Bool {
@@ -614,29 +624,58 @@ final class TypingService {
             return false
         }
 
-        let utf16Array = Array(text.utf16)
-        self.log("[TypingService] Converting \(text.count) characters to CGEvents (UTF16 count \(utf16Array.count))")
+        let chunkSize = TypingService.pidUnicodeChunkSize(
+            osMajorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+        )
+        let effectiveChunkSize = chunkSize > 0 ? chunkSize : max(1, text.count)
+        let interChunkDelayMicroseconds: useconds_t = chunkSize > 0 ? 1_000 : 0
 
-        guard utf16Array.count <= Self.cgEventUnicodeLimit else {
-            self.log("[TypingService] Text too long for single CGEvent (\(utf16Array.count) UTF-16 units > \(Self.cgEventUnicodeLimit)), falling back")
-            return false
+        self.log(
+            "[TypingService] PID unicode sender configured with chunk size \(chunkSize), effective chunk size \(effectiveChunkSize)"
+        )
+
+        func postTextAsUnicodeEvents(_ payload: String) -> Bool {
+            let utf16Array = Array(payload.utf16)
+            guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
+                  let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false)
+            else {
+                self.log("[TypingService] ERROR: Failed to create bulk CGEvents")
+                return false
+            }
+
+            keyDown.keyboardSetUnicodeString(stringLength: utf16Array.count, unicodeString: utf16Array)
+            keyUp.keyboardSetUnicodeString(stringLength: utf16Array.count, unicodeString: utf16Array)
+
+            keyDown.postToPid(targetPID)
+            usleep(2000)
+            keyUp.postToPid(targetPID)
+            return true
         }
 
-        guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false)
-        else {
-            self.log("[TypingService] ERROR: Failed to create bulk CGEvents")
-            return false
+        var chunk = ""
+        chunk.reserveCapacity(min(effectiveChunkSize, max(1, text.count)))
+        var chunkCount = 0
+        var postedChunkCount = 0
+        let totalCharacterCount = text.count
+
+        for (index, char) in text.enumerated() {
+            chunk.append(char)
+            chunkCount += 1
+
+            let isLastCharacter = index + 1 == totalCharacterCount
+            let shouldPostChunk = chunkCount >= effectiveChunkSize || isLastCharacter
+            if shouldPostChunk {
+                if postTextAsUnicodeEvents(chunk) == false { return false }
+                postedChunkCount += 1
+                chunk.removeAll(keepingCapacity: true)
+                chunkCount = 0
+                if interChunkDelayMicroseconds > 0 && isLastCharacter == false {
+                    usleep(interChunkDelayMicroseconds)
+                }
+            }
         }
 
-        keyDown.keyboardSetUnicodeString(stringLength: utf16Array.count, unicodeString: utf16Array)
-        keyUp.keyboardSetUnicodeString(stringLength: utf16Array.count, unicodeString: utf16Array)
-
-        keyDown.postToPid(targetPID)
-        usleep(2000)
-        keyUp.postToPid(targetPID)
-
-        self.log("[TypingService] Posted bulk CGEvents to PID \(targetPID)")
+        self.log("[TypingService] Posted \(postedChunkCount) PID unicode chunk(s) to PID \(targetPID)")
         return true
     }
 
