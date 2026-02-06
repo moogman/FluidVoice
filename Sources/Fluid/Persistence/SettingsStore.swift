@@ -1675,11 +1675,15 @@ final class SettingsStore: ObservableObject {
                 }
                 // Filter by macOS 26 requirement
                 if model.requiresMacOS26 {
+                    #if ENABLE_SPEECH_ANALYZER
                     if #available(macOS 26.0, *) {
                         return true
                     } else {
                         return false
                     }
+                    #else
+                    return false
+                    #endif
                 }
                 return true
             }

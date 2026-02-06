@@ -1,6 +1,8 @@
+#if ENABLE_SPEECH_ANALYZER
+
 import AVFoundation
-import Combine
 import Foundation
+import FluidSpeechAnalyzerPluginInterface
 
 #if canImport(Speech)
 import Speech
@@ -8,10 +10,10 @@ import Speech
 
 // MARK: - Apple Speech Analyzer Provider (macOS 26+)
 
-/// A TranscriptionProvider that uses Apple's new SpeechAnalyzer API (macOS 26+).
+/// A SpeechAnalyzerProvider that uses Apple's new SpeechAnalyzer API (macOS 26+).
 /// This provides advanced speech-to-text with streaming capabilities.
 @available(macOS 26.0, *)
-final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
+final class AppleSpeechAnalyzerProvider: SpeechAnalyzerProvider {
     var name: String { "Apple Speech (macOS 26+)" }
 
     var isAvailable: Bool {
@@ -31,8 +33,11 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
     /// Protected by `_cacheQueue` for thread-safe access from both sync and async contexts.
     private var _modelsInstalledCache: Bool = false
     private let _cacheQueue = DispatchQueue(label: "com.fluidvoice.speechanalyzer.cache")
+    private let logger: (any SpeechAnalyzerPluginLogger)?
 
-    init() {}
+    init(logSink: (any SpeechAnalyzerPluginLogger)? = nil) {
+        self.logger = logSink
+    }
 
     // MARK: - Lifecycle
 
@@ -63,7 +68,7 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
         let isInstalled = installedLocales.map { $0.identifier(.bcp47) }.contains(currentLocaleID)
 
         if !isInstalled {
-            DebugLogger.shared.info("Downloading speech model for locale: \(currentLocaleID)", source: "AppleSpeechAnalyzerProvider")
+            self.logger?.info("Downloading speech model for locale: \(currentLocaleID)", source: "AppleSpeechAnalyzerProvider")
             if let downloader = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
                 // Report progress periodically during download
                 let progress = downloader.progress
@@ -86,7 +91,7 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
         // Update cache to reflect that model is now installed (thread-safe)
         self._cacheQueue.sync { self._modelsInstalledCache = true }
 
-        DebugLogger.shared.info("AppleSpeechAnalyzerProvider ready", source: "AppleSpeechAnalyzerProvider")
+        self.logger?.info("AppleSpeechAnalyzerProvider ready", source: "AppleSpeechAnalyzerProvider")
     }
 
     func clearCache() async throws {
@@ -127,7 +132,7 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
 
         self._cacheQueue.sync { self._modelsInstalledCache = isInstalled }
 
-        DebugLogger.shared.debug(
+        self.logger?.debug(
             "AppleSpeechAnalyzer: Model installed check - locale: \(currentLocaleID), installed: \(isInstalled)",
             source: "AppleSpeechAnalyzerProvider"
         )
@@ -137,7 +142,7 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
 
     // MARK: - Transcription
 
-    func transcribe(_ samples: [Float]) async throws -> ASRTranscriptionResult {
+    func transcribe(_ samples: [Float]) async throws -> SpeechAnalyzerTranscriptionResult {
         guard self.isReady, let analyzerFormat = self.analyzerFormat else {
             throw NSError(
                 domain: "AppleSpeechAnalyzerProvider",
@@ -146,7 +151,7 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
             )
         }
 
-        DebugLogger.shared.debug("AppleSpeechAnalyzer: Starting transcription with \(samples.count) samples", source: "AppleSpeechAnalyzerProvider")
+        self.logger?.debug("AppleSpeechAnalyzer: Starting transcription with \(samples.count) samples", source: "AppleSpeechAnalyzerProvider")
 
         // 1. Create a FRESH transcriber for this transcription
         let freshTranscriber = SpeechTranscriber(
@@ -177,7 +182,7 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
             do {
                 convertedBuffer = try converter.convertBuffer(buffer, to: analyzerFormat)
             } catch {
-                DebugLogger.shared.warning("Buffer conversion failed: \(error)", source: "AppleSpeechAnalyzerProvider")
+                self.logger?.warning("Buffer conversion failed: \(error)", source: "AppleSpeechAnalyzerProvider")
                 convertedBuffer = buffer
             }
         } else {
@@ -187,10 +192,10 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
         // 6. Set up results collector FIRST (before starting analyzer - per Apple's pattern)
         var finalText = ""
         let resultsTask = Task {
-            DebugLogger.shared.debug("AppleSpeechAnalyzer: Results task started, waiting for results...", source: "AppleSpeechAnalyzerProvider")
+            self.logger?.debug("AppleSpeechAnalyzer: Results task started, waiting for results...", source: "AppleSpeechAnalyzerProvider")
             for try await case let result in freshTranscriber.results {
                 let text = String(result.text.characters)
-                DebugLogger.shared.debug("AppleSpeechAnalyzer: Got result - isFinal: \(result.isFinal), text: '\(text)'", source: "AppleSpeechAnalyzerProvider")
+                self.logger?.debug("AppleSpeechAnalyzer: Got result - isFinal: \(result.isFinal), text: '\(text)'", source: "AppleSpeechAnalyzerProvider")
                 if result.isFinal {
                     // ACCUMULATE results (per Apple's pattern) - don't break!
                     if !finalText.isEmpty && !text.isEmpty {
@@ -200,37 +205,37 @@ final class AppleSpeechAnalyzerProvider: TranscriptionProvider {
                 }
                 // Continue iterating until stream ends (after finalizeAndFinish)
             }
-            DebugLogger.shared.debug("AppleSpeechAnalyzer: Results iteration complete, accumulated: '\(finalText)'", source: "AppleSpeechAnalyzerProvider")
+            self.logger?.debug("AppleSpeechAnalyzer: Results iteration complete, accumulated: '\(finalText)'", source: "AppleSpeechAnalyzerProvider")
         }
 
         // 7. Start the analyzer (this kicks off processing)
-        DebugLogger.shared.debug("AppleSpeechAnalyzer: Starting analyzer...", source: "AppleSpeechAnalyzerProvider")
+        self.logger?.debug("AppleSpeechAnalyzer: Starting analyzer...", source: "AppleSpeechAnalyzerProvider")
         try await analyzer.start(inputSequence: inputStream)
-        DebugLogger.shared.debug("AppleSpeechAnalyzer: Analyzer started", source: "AppleSpeechAnalyzerProvider")
+        self.logger?.debug("AppleSpeechAnalyzer: Analyzer started", source: "AppleSpeechAnalyzerProvider")
 
         // 8. Feed audio and signal end of input
         let input = AnalyzerInput(buffer: convertedBuffer)
         inputContinuation.yield(input)
         inputContinuation.finish()
-        DebugLogger.shared.debug("AppleSpeechAnalyzer: Audio fed and input finished", source: "AppleSpeechAnalyzerProvider")
+        self.logger?.debug("AppleSpeechAnalyzer: Audio fed and input finished", source: "AppleSpeechAnalyzerProvider")
 
         // 9. Finalize - this tells the analyzer to process remaining audio and complete the results stream
         do {
             try await analyzer.finalizeAndFinishThroughEndOfInput()
-            DebugLogger.shared.debug("AppleSpeechAnalyzer: Analyzer finalized", source: "AppleSpeechAnalyzerProvider")
+            self.logger?.debug("AppleSpeechAnalyzer: Analyzer finalized", source: "AppleSpeechAnalyzerProvider")
         } catch {
-            DebugLogger.shared.warning("Analyzer finalize error: \(error.localizedDescription)", source: "AppleSpeechAnalyzerProvider")
+            self.logger?.warning("Analyzer finalize error: \(error.localizedDescription)", source: "AppleSpeechAnalyzerProvider")
         }
 
         // 10. Now wait for results task to complete (it will finish once stream closes)
         do {
             try await resultsTask.value
         } catch {
-            DebugLogger.shared.warning("Speech recognition error: \(error.localizedDescription)", source: "AppleSpeechAnalyzerProvider")
+            self.logger?.warning("Speech recognition error: \(error.localizedDescription)", source: "AppleSpeechAnalyzerProvider")
         }
 
-        DebugLogger.shared.debug("AppleSpeechAnalyzer: Transcription complete - result: '\(finalText)'", source: "AppleSpeechAnalyzerProvider")
-        return ASRTranscriptionResult(text: finalText, confidence: 1.0)
+        self.logger?.debug("AppleSpeechAnalyzer: Transcription complete - result: '\(finalText)'", source: "AppleSpeechAnalyzerProvider")
+        return SpeechAnalyzerTranscriptionResult(text: finalText, confidence: 1.0)
     }
 
     // MARK: - Helpers
@@ -320,3 +325,5 @@ private class BufferConverter {
         return conversionBuffer
     }
 }
+
+#endif // ENABLE_SPEECH_ANALYZER

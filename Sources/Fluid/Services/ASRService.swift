@@ -135,8 +135,7 @@ final class ASRService: ObservableObject {
     private var fluidAudioProvider: FluidAudioProvider?
     private var whisperProvider: WhisperProvider?
     private var appleSpeechProvider: AppleSpeechProvider?
-    /// Stored as Any? because @available cannot be applied to stored properties
-    private var _appleSpeechAnalyzerProvider: Any?
+    private var _appleSpeechAnalyzerProvider: AppleSpeechAnalyzerPluginProvider?
 
     /// Prevent concurrent provider.prepare() calls (download/load) from overlapping.
     /// Subsequent callers await the in-flight task.
@@ -195,15 +194,19 @@ final class ASRService: ObservableObject {
         return provider
     }
 
-    @available(macOS 26.0, *)
-    private func getAppleSpeechAnalyzerProvider() -> AppleSpeechAnalyzerProvider {
-        if let existing = _appleSpeechAnalyzerProvider as? AppleSpeechAnalyzerProvider {
+    private func getAppleSpeechAnalyzerProvider() -> TranscriptionProvider {
+        if let existing = self._appleSpeechAnalyzerProvider {
             return existing
         }
-        let provider = AppleSpeechAnalyzerProvider()
-        self._appleSpeechAnalyzerProvider = provider
-        DebugLogger.shared.info("ASRService: Created AppleSpeechAnalyzer provider", source: "ASRService")
-        return provider
+
+        if #available(macOS 26.0, *), let pluginProvider = SpeechAnalyzerPluginLoader.shared.makeProvider() {
+            let provider = AppleSpeechAnalyzerPluginProvider(pluginProvider: pluginProvider)
+            self._appleSpeechAnalyzerProvider = provider
+            DebugLogger.shared.info("ASRService: Created AppleSpeechAnalyzer plugin provider", source: "ASRService")
+            return provider
+        }
+
+        return self.getAppleSpeechProvider()
     }
 
     /// Returns the user-friendly name of the currently selected speech model
@@ -222,8 +225,8 @@ final class ASRService: ObservableObject {
     private func getProvider(for model: SettingsStore.SpeechModel) -> TranscriptionProvider {
         switch model {
         case .appleSpeechAnalyzer:
-            if #available(macOS 26.0, *) {
-                return AppleSpeechAnalyzerProvider()
+            if #available(macOS 26.0, *), let pluginProvider = SpeechAnalyzerPluginLoader.shared.makeProvider() {
+                return AppleSpeechAnalyzerPluginProvider(pluginProvider: pluginProvider)
             } else {
                 return AppleSpeechProvider()
             }
@@ -449,14 +452,16 @@ final class ASRService: ObservableObject {
     func checkIfModelsExistAsync() async {
         let model = SettingsStore.shared.selectedSpeechModel
 
-        // For Apple Speech Analyzer, use the async refresh method
+        // For Apple Speech Analyzer, use the async refresh method when available
         if model == .appleSpeechAnalyzer {
             if #available(macOS 26.0, *) {
                 let provider = self.getAppleSpeechAnalyzerProvider()
-                let isInstalled = await provider.refreshModelsExistOnDiskAsync()
-                self.modelsExistOnDisk = isInstalled
-                DebugLogger.shared.debug("Models exist on disk (async): \(self.modelsExistOnDisk)", source: "ASRService")
-                return
+                if let asyncChecker = provider as? AsyncModelsExistOnDiskChecking {
+                    let isInstalled = await asyncChecker.refreshModelsExistOnDiskAsync()
+                    self.modelsExistOnDisk = isInstalled
+                    DebugLogger.shared.debug("Models exist on disk (async): \(self.modelsExistOnDisk)", source: "ASRService")
+                    return
+                }
             }
         }
 

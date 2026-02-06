@@ -8,10 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		7C078DA52E3B386A00FB7CAC /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 7C078DA42E3B386A00FB7CAC /* FluidAudio */; };
+		8C8CEBEB3E09D35C71EB8F82 /* FluidSpeechAnalyzerPluginInterface.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = CCFC7E4254C12CE8BEAEC99D /* FluidSpeechAnalyzerPluginInterface.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B7016D28A88723E32EB6FC86 /* FluidSpeechAnalyzerPluginInterface.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CCFC7E4254C12CE8BEAEC99D /* FluidSpeechAnalyzerPluginInterface.framework */; };
+		DDE75705276637F1BF94B527 /* FluidSpeechAnalyzerPlugin.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 790580D2910F530623B31A5C /* FluidSpeechAnalyzerPlugin.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		3B4AF7AB4DB020D2A8073CD0 /* FluidSpeechAnalyzerPluginInterface.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CCFC7E4254C12CE8BEAEC99D /* FluidSpeechAnalyzerPluginInterface.framework */; };
 		7C1C72F22EECBD1300E3BF4D /* SwiftWhisper in Frameworks */ = {isa = PBXBuildFile; productRef = 7C1C72F12EECBD1300E3BF4D /* SwiftWhisper */; };
 		7C3236542EAAD608007E4CB6 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = 7C3236532EAAD608007E4CB6 /* MCP */; };
 		7C3697892ED70F9C005874CE /* DynamicNotchKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7C3697882ED70F9C005874CE /* DynamicNotchKit */; };
 		7C5AF14B2F15041600DE21B0 /* MediaRemoteAdapter in Frameworks */ = {isa = PBXBuildFile; productRef = 7C5AF14A2F15041600DE21B0 /* MediaRemoteAdapter */; };
+		7C5AF14C2F15041600DE21B0 /* MediaRemoteAdapter in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 7C5AF14A2F15041600DE21B0 /* MediaRemoteAdapter */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7CDB0A2D2F3C4D5600FB7CAD /* DictationE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CDB0A292F3C4D5600FB7CAD /* DictationE2ETests.swift */; };
 		7CDB0A2E2F3C4D5600FB7CAD /* AudioFixtureLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CDB0A2A2F3C4D5600FB7CAD /* AudioFixtureLoader.swift */; };
 		7CDB0A2F2F3C4D5600FB7CAD /* dictation_fixture.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7CDB0A2B2F3C4D5600FB7CAD /* dictation_fixture.wav */; };
@@ -22,6 +27,27 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		45663AF3835E3D930A0DE26B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7C078D872E3B339200FB7CAC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7C613D06305C85E17A41B8F1;
+			remoteInfo = FluidSpeechAnalyzerPluginInterface;
+		};
+		5AD84E6E49AAFACBFEFF37A1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7C078D872E3B339200FB7CAC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7C613D06305C85E17A41B8F1;
+			remoteInfo = FluidSpeechAnalyzerPluginInterface;
+		};
+		A1013D169AC91541B10EDAEA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7C078D872E3B339200FB7CAC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2A414BAD886304C10EE7A7A8;
+			remoteInfo = FluidSpeechAnalyzerPlugin;
+		};
 		7CDB0A322F3C4D5600FB7CAD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 7C078D872E3B339200FB7CAC /* Project object */;
@@ -32,6 +58,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		790580D2910F530623B31A5C /* FluidSpeechAnalyzerPlugin.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FluidSpeechAnalyzerPlugin.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		CCFC7E4254C12CE8BEAEC99D /* FluidSpeechAnalyzerPluginInterface.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FluidSpeechAnalyzerPluginInterface.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		7C078D8F2E3B339200FB7CAC /* FluidVoice Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "FluidVoice Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7CDB0A202F3C4D5600FB7CAD /* FluidDictationIntegrationTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FluidDictationIntegrationTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7CDB0A292F3C4D5600FB7CAD /* DictationE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationE2ETests.swift; sourceTree = "<group>"; };
@@ -43,9 +71,19 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		1CF9DAF7AE7A173C3CF69EB0 /* Sources/FluidSpeechAnalyzerPlugin */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Sources/FluidSpeechAnalyzerPlugin;
+			sourceTree = "<group>";
+		};
 		7C078D912E3B339200FB7CAC /* Sources/Fluid */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Sources/Fluid;
+			sourceTree = "<group>";
+		};
+		E9ACB14D0405ABD5F563DE98 /* Sources/FluidSpeechAnalyzerPluginInterface */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Sources/FluidSpeechAnalyzerPluginInterface;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -55,12 +93,21 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B7016D28A88723E32EB6FC86 /* FluidSpeechAnalyzerPluginInterface.framework in Frameworks */,
 				7C3697892ED70F9C005874CE /* DynamicNotchKit in Frameworks */,
 				7C5AF14B2F15041600DE21B0 /* MediaRemoteAdapter in Frameworks */,
 				7C3236542EAAD608007E4CB6 /* MCP in Frameworks */,
 				7C1C72F22EECBD1300E3BF4D /* SwiftWhisper in Frameworks */,
 				7CE006BD2E80EBE600DDCCD6 /* AppUpdater in Frameworks */,
 				7C078DA52E3B386A00FB7CAC /* FluidAudio in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		79995AB83A0A73844E7E7DCC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3B4AF7AB4DB020D2A8073CD0 /* FluidSpeechAnalyzerPluginInterface.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -72,13 +119,38 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CCB7497634DE4E92991467A5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+			7C5AF14D2F15041600DE21B0 /* Embed Frameworks */ = {
+				isa = PBXCopyFilesBuildPhase;
+				buildActionMask = 2147483647;
+				dstPath = "";
+				dstSubfolderSpec = 10;
+				files = (
+					8C8CEBEB3E09D35C71EB8F82 /* FluidSpeechAnalyzerPluginInterface.framework in Embed Frameworks */,
+					DDE75705276637F1BF94B527 /* FluidSpeechAnalyzerPlugin.framework in Embed Frameworks */,
+					7C5AF14C2F15041600DE21B0 /* MediaRemoteAdapter in Embed Frameworks */,
+				);
+				name = "Embed Frameworks";
+				runOnlyForDeploymentPostprocessing = 0;
+			};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXGroup section */
 		7C078D862E3B339200FB7CAC = {
 			isa = PBXGroup;
 			children = (
 				7C078D912E3B339200FB7CAC /* Sources/Fluid */,
+				E9ACB14D0405ABD5F563DE98 /* Sources/FluidSpeechAnalyzerPluginInterface */,
+				1CF9DAF7AE7A173C3CF69EB0 /* Sources/FluidSpeechAnalyzerPlugin */,
 				7CDB0A242F3C4D5600FB7CAD /* Tests */,
 				7CDB0A282F3C4D5600FB7CAD /* Frameworks */,
 			);
@@ -88,6 +160,8 @@
 			isa = PBXGroup;
 			children = (
 				7C078D8F2E3B339200FB7CAC /* FluidVoice Debug.app */,
+				CCFC7E4254C12CE8BEAEC99D /* FluidSpeechAnalyzerPluginInterface.framework */,
+				790580D2910F530623B31A5C /* FluidSpeechAnalyzerPlugin.framework */,
 				7CDB0A202F3C4D5600FB7CAD /* FluidDictationIntegrationTests.xctest */,
 			);
 			name = Products;
@@ -144,11 +218,14 @@
 			buildPhases = (
 				7C078D8B2E3B339200FB7CAC /* Sources */,
 				7C078D8C2E3B339200FB7CAC /* Frameworks */,
+				7C5AF14D2F15041600DE21B0 /* Embed Frameworks */,
 				7C078D8D2E3B339200FB7CAC /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				5A126FB64F312F64B99CF849 /* PBXTargetDependency */,
+				6080575A7AD6E09603DB8003 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				7C078D912E3B339200FB7CAC /* Sources/Fluid */,
@@ -165,6 +242,45 @@
 			productName = FluidVoice;
 			productReference = 7C078D8F2E3B339200FB7CAC /* FluidVoice Debug.app */;
 			productType = "com.apple.product-type.application";
+		};
+		2A414BAD886304C10EE7A7A8 /* FluidSpeechAnalyzerPlugin */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 020DE1D5954C9DC6E84F5CA9 /* Build configuration list for PBXNativeTarget "FluidSpeechAnalyzerPlugin" */;
+			buildPhases = (
+				3A5B2A0D32AFFBD38B33F74A /* Sources */,
+				79995AB83A0A73844E7E7DCC /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FA3D2FE2A1422FD07F6BE17C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				1CF9DAF7AE7A173C3CF69EB0 /* Sources/FluidSpeechAnalyzerPlugin */,
+			);
+			name = FluidSpeechAnalyzerPlugin;
+			productName = FluidSpeechAnalyzerPlugin;
+			productReference = 790580D2910F530623B31A5C /* FluidSpeechAnalyzerPlugin.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		7C613D06305C85E17A41B8F1 /* FluidSpeechAnalyzerPluginInterface */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 037C2E865B61ED8570786D20 /* Build configuration list for PBXNativeTarget "FluidSpeechAnalyzerPluginInterface" */;
+			buildPhases = (
+				F08756FF4DB55D5F4B2F39FD /* Sources */,
+				CCB7497634DE4E92991467A5 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E9ACB14D0405ABD5F563DE98 /* Sources/FluidSpeechAnalyzerPluginInterface */,
+			);
+			name = FluidSpeechAnalyzerPluginInterface;
+			productName = FluidSpeechAnalyzerPluginInterface;
+			productReference = CCFC7E4254C12CE8BEAEC99D /* FluidSpeechAnalyzerPluginInterface.framework */;
+			productType = "com.apple.product-type.framework";
 		};
 		7CDB0A1F2F3C4D5600FB7CAD /* FluidDictationIntegrationTests */ = {
 			isa = PBXNativeTarget;
@@ -194,7 +310,13 @@
 				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
+					2A414BAD886304C10EE7A7A8 = {
+						CreatedOnToolsVersion = 26.0;
+					};
 					7C078D8E2E3B339200FB7CAC = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					7C613D06305C85E17A41B8F1 = {
 						CreatedOnToolsVersion = 26.0;
 					};
 					7CDB0A1F2F3C4D5600FB7CAD = {
@@ -225,6 +347,8 @@
 			projectRoot = "";
 			targets = (
 				7C078D8E2E3B339200FB7CAC /* fluid */,
+				7C613D06305C85E17A41B8F1 /* FluidSpeechAnalyzerPluginInterface */,
+				2A414BAD886304C10EE7A7A8 /* FluidSpeechAnalyzerPlugin */,
 				7CDB0A1F2F3C4D5600FB7CAD /* FluidDictationIntegrationTests */,
 			);
 		};
@@ -251,6 +375,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		3A5B2A0D32AFFBD38B33F74A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		7C078D8B2E3B339200FB7CAC /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -267,13 +398,35 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F08756FF4DB55D5F4B2F39FD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		5A126FB64F312F64B99CF849 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7C613D06305C85E17A41B8F1 /* FluidSpeechAnalyzerPluginInterface */;
+			targetProxy = 45663AF3835E3D930A0DE26B /* PBXContainerItemProxy */;
+		};
+		6080575A7AD6E09603DB8003 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2A414BAD886304C10EE7A7A8 /* FluidSpeechAnalyzerPlugin */;
+			targetProxy = A1013D169AC91541B10EDAEA /* PBXContainerItemProxy */;
+		};
 		7CDB0A312F3C4D5600FB7CAD /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 7C078D8E2E3B339200FB7CAC /* fluid */;
 			targetProxy = 7CDB0A322F3C4D5600FB7CAD /* PBXContainerItemProxy */;
+		};
+		FA3D2FE2A1422FD07F6BE17C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7C613D06305C85E17A41B8F1 /* FluidSpeechAnalyzerPluginInterface */;
+			targetProxy = 5AD84E6E49AAFACBFEFF37A1 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -446,8 +599,10 @@
 				PRODUCT_NAME = "FluidVoice Debug";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
+				SPEECH_ANALYZER_COMPILATION_CONDITION = "";
+				"SPEECH_ANALYZER_COMPILATION_CONDITION[sdk=macosx26*]" = ENABLE_SPEECH_ANALYZER;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) ARCH_ARM64";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) ARCH_ARM64 $(SPEECH_ANALYZER_COMPILATION_CONDITION)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -500,14 +655,106 @@
 				PRODUCT_NAME = FluidVoice;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
+				SPEECH_ANALYZER_COMPILATION_CONDITION = "";
+				"SPEECH_ANALYZER_COMPILATION_CONDITION[sdk=macosx26*]" = ENABLE_SPEECH_ANALYZER;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) ARCH_ARM64";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) ARCH_ARM64 $(SPEECH_ANALYZER_COMPILATION_CONDITION)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				VALID_ARCHS = "$(ARCHS_STANDARD)";
+			};
+			name = Release;
+		};
+		470AFFE3106913DED08E5728 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
+				CLANG_ENABLE_MODULES = YES;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = V4J43B279J;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.FluidApp.FluidSpeechAnalyzerPlugin;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SPEECH_ANALYZER_COMPILATION_CONDITION = "";
+				"SPEECH_ANALYZER_COMPILATION_CONDITION[sdk=macosx26*]" = ENABLE_SPEECH_ANALYZER;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) $(SPEECH_ANALYZER_COMPILATION_CONDITION)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		63ADC481E6942F56A7E3AF5D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
+				CLANG_ENABLE_MODULES = YES;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = V4J43B279J;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.FluidApp.FluidSpeechAnalyzerPlugin;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SPEECH_ANALYZER_COMPILATION_CONDITION = "";
+				"SPEECH_ANALYZER_COMPILATION_CONDITION[sdk=macosx26*]" = ENABLE_SPEECH_ANALYZER;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) $(SPEECH_ANALYZER_COMPILATION_CONDITION)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		D01135AC0702EF77EBDBFD6F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
+				CLANG_ENABLE_MODULES = YES;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = V4J43B279J;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.FluidApp.FluidSpeechAnalyzerPluginInterface;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D897A4D9B0C55EBC69627827 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
+				CLANG_ENABLE_MODULES = YES;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = V4J43B279J;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.FluidApp.FluidSpeechAnalyzerPluginInterface;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
@@ -563,6 +810,24 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		020DE1D5954C9DC6E84F5CA9 /* Build configuration list for PBXNativeTarget "FluidSpeechAnalyzerPlugin" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				470AFFE3106913DED08E5728 /* Debug */,
+				63ADC481E6942F56A7E3AF5D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		037C2E865B61ED8570786D20 /* Build configuration list for PBXNativeTarget "FluidSpeechAnalyzerPluginInterface" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D01135AC0702EF77EBDBFD6F /* Debug */,
+				D897A4D9B0C55EBC69627827 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		7C078D8A2E3B339200FB7CAC /* Build configuration list for PBXProject "Fluid" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

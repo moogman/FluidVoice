@@ -193,6 +193,11 @@ final class TypingService {
     private func insertTextBulkInstant(_ text: String, targetPID: pid_t) -> Bool {
         self.log("[TypingService] Starting INSTANT bulk CGEvent insertion (NO CLIPBOARD) to PID \(targetPID)")
 
+        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion <= 14 {
+            self.log("[TypingService] PID-targeted unicode insertion disabled on macOS 14 or lower; using fallback path")
+            return false
+        }
+
         guard targetPID > 0 else {
             self.log("[TypingService] ERROR: Invalid target PID \(targetPID)")
             return false
