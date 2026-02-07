@@ -1703,10 +1703,6 @@ final class ASRService: ObservableObject {
     // Device caching for change detection
     private var cachedDeviceUIDs: Set<String> = []
 
-    private func checkDeviceWasAvailable(_ uid: String) -> Bool {
-        return self.cachedDeviceUIDs.contains(uid)
-    }
-
     private func cacheCurrentDeviceList(_ devices: [AudioDevice.Device]) {
         self.cachedDeviceUIDs = Set(devices.map { $0.uid })
     }
