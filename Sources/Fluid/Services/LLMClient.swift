@@ -146,29 +146,11 @@ final class LLMClient {
 
         self.logRequest(request)
 
-        // Wrap the entire operation in a timeout
-        return try await withThrowingTaskGroup(of: Response.self) { group in
-            // Add the actual request task
-            group.addTask {
-                try await self.executeWithRetry(request: request, config: config)
-            }
-
-            // Add a timeout task
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                throw LLMError.timeout(timeout)
-            }
-
-            // Return the first result (success or error)
-            // Cancel remaining tasks when one completes
-            guard let result = try await group.next() else {
-                throw LLMError.networkError(
-                    NSError(domain: "LLMClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "No response"])
-                )
-            }
-            group.cancelAll()
-            return result
-        }
+        // Execute the request. We rely on URLRequest/URLSession timeouts (30s default) rather
+        // than racing a separate "timeout task". A task-group timeout wrapper can accidentally
+        // keep the caller suspended until the full timeout elapses, which is the exact stall
+        // we want to eliminate for overlay responsiveness.
+        return try await self.executeWithRetry(request: request, config: config)
     }
 
     /// Execute request with retry logic (extracted for timeout wrapper)
