@@ -63,7 +63,6 @@ class NotchContentState: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
-
     private init() {
         let previewLimitChanged = NotificationCenter.default.publisher(
             for: NSNotification.Name("TranscriptionPreviewCharLimitChanged")
@@ -75,7 +74,7 @@ class NotchContentState: ObservableObject {
             .sink { [weak self] _ in
                 self?.recomputeTranscriptionLines()
             }
-            .store(in: &cancellables)
+            .store(in: &self.cancellables)
     }
 
     /// Set AI processing state
