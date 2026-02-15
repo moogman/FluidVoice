@@ -1479,13 +1479,13 @@ final class ASRService: ObservableObject {
         // Perform CoreAudio queries off the main thread — during a device topology change
         // the HAL may still be settling, and synchronous queries on main can deadlock.
         let preferredUID = SettingsStore.shared.preferredInputDeviceUID
-        let cachedUIDs = self.cachedDeviceUIDs
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let currentDevices = AudioDevice.listInputDevices()
             let systemDefault = AudioDevice.getDefaultInputDevice()
 
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
+                let cachedUIDs = self.cachedDeviceUIDs
 
                 DebugLogger.shared.debug("Current input devices: \(currentDevices.map { $0.name }.joined(separator: ", "))", source: "ASRService")
 
