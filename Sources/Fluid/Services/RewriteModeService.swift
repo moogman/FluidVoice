@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import CryptoKit
 import Foundation
 
 @MainActor
@@ -18,9 +19,18 @@ final class RewriteModeService: ObservableObject {
     private var forcePromptTraceToConsole: Bool {
         ProcessInfo.processInfo.environment["FLUID_PROMPT_TRACE"] == "1"
     }
+    private var diagnosticsEnabled: Bool {
+        if ProcessInfo.processInfo.environment["FLUID_REWRITE_DIAGNOSTICS"] == "1" {
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: "RewriteModeDiagnosticsEnabled")
+    }
     private var shouldTracePromptProcessing: Bool {
-        self.forcePromptTraceToConsole ||
-            UserDefaults.standard.bool(forKey: "EnableDebugLogs")
+        if let explicit = UserDefaults.standard.object(forKey: "RewriteModePromptTraceEnabled") as? Bool {
+            return explicit
+        }
+        // Default OFF to avoid logging prompt/context content in normal usage.
+        return false
     }
 
     struct Message: Identifiable, Equatable {
@@ -70,6 +80,9 @@ final class RewriteModeService: ObservableObject {
 
     func processRewriteRequest(_ prompt: String) async {
         let startTime = Date()
+        self.appendDiagnosticLog(
+            "processRewriteRequest start | promptChars=\(prompt.count) | hadOriginal=\(!self.originalText.isEmpty) | contextChars=\(self.selectedContextText.count)"
+        )
         // If no original text, we're in "Write Mode" - generate content based on user's request
         if self.originalText.isEmpty {
             self.originalText = prompt
@@ -113,6 +126,9 @@ final class RewriteModeService: ObservableObject {
             self.conversationHistory.append(Message(role: .assistant, content: response))
             self.rewrittenText = response
             self.isProcessing = false
+            self.appendDiagnosticLog(
+                "processRewriteRequest success | writeMode=\(self.isWriteMode) | outputChars=\(response.count) | latency=\(String(format: "%.2fs", Date().timeIntervalSince(startTime)))"
+            )
 
             AnalyticsService.shared.capture(
                 .rewriteRunCompleted,
@@ -125,6 +141,9 @@ final class RewriteModeService: ObservableObject {
         } catch {
             self.conversationHistory.append(Message(role: .assistant, content: "Error: \(error.localizedDescription)"))
             self.isProcessing = false
+            self.appendDiagnosticLog(
+                "processRewriteRequest failure | writeMode=\(self.isWriteMode) | error=\(error.localizedDescription)"
+            )
 
             AnalyticsService.shared.capture(
                 .rewriteRunCompleted,
@@ -179,7 +198,11 @@ final class RewriteModeService: ObservableObject {
         // Use global provider/model when linked, otherwise use Edit Mode's independent settings.
         let providerID: String = {
             if settings.rewriteModeLinkedToGlobal {
-                return settings.selectedProviderID
+                let globalProvider = settings.selectedProviderID
+                if self.isProviderVerified(globalProvider, settings: settings) {
+                    return globalProvider
+                }
+                return settings.rewriteModeSelectedProviderID
             }
             return settings.rewriteModeSelectedProviderID
         }()
@@ -250,6 +273,9 @@ final class RewriteModeService: ObservableObject {
             }
             return settings.rewriteModeSelectedModel ?? "gpt-4.1"
         }()
+        self.appendDiagnosticLog(
+            "LLM config | writeMode=\(isWriteMode) | linkedToGlobal=\(settings.rewriteModeLinkedToGlobal) | provider=\(providerID) | model=\(model) | profile=\(selectedPromptName) | contextChars=\(contextText.count) | contextInjected=\(!contextBlock.isEmpty)"
+        )
         let apiKey = settings.getAPIKey(for: providerID) ?? ""
 
         let baseURL: String
@@ -270,8 +296,9 @@ final class RewriteModeService: ObservableObject {
             apiMessages.append(["role": msg.role == .user ? "user" : "assistant", "content": msg.content])
         }
 
-        // Check streaming setting
-        let enableStreaming = settings.enableAIStreaming
+        // Edit Text mode does not need token-by-token UI updates.
+        // Keep this non-streaming to reduce CPU/battery churn on smaller devices.
+        let enableStreaming = false
 
         // Reasoning models (o1, o3, gpt-5) don't support temperature parameter at all
         let isReasoningModel = settings.isReasoningModel(model)
@@ -358,6 +385,50 @@ final class RewriteModeService: ObservableObject {
         if self.forcePromptTraceToConsole {
             print(line)
         }
+        self.appendDiagnosticLog(line)
+    }
+
+    private func appendDiagnosticLog(_ message: String) {
+        guard self.diagnosticsEnabled || self.forcePromptTraceToConsole else { return }
+        let line = "[RewriteModeService] \(message)"
+        FileLogger.shared.append(line: line)
         DebugLogger.shared.debug(line, source: "RewriteModeService")
+    }
+
+    private func providerKey(for providerID: String) -> String {
+        if ModelRepository.shared.isBuiltIn(providerID) { return providerID }
+        if providerID.hasPrefix("custom:") { return providerID }
+        return "custom:\(providerID)"
+    }
+
+    private func providerBaseURL(for providerID: String, settings: SettingsStore) -> String {
+        if let saved = settings.savedProviders.first(where: { $0.id == providerID }) {
+            return saved.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if ModelRepository.shared.isBuiltIn(providerID) {
+            return ModelRepository.shared.defaultBaseURL(for: providerID).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return ""
+    }
+
+    private func providerFingerprint(baseURL: String, apiKey: String) -> String? {
+        let trimmedBase = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedBase.isEmpty else { return nil }
+        let input = "\(trimmedBase)|\(trimmedKey)"
+        let digest = SHA256.hash(data: Data(input.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func isProviderVerified(_ providerID: String, settings: SettingsStore) -> Bool {
+        let key = self.providerKey(for: providerID)
+        guard let stored = settings.verifiedProviderFingerprints[key] else { return false }
+        if providerID == "apple-intelligence" {
+            return stored == "apple-intelligence"
+        }
+        let baseURL = self.providerBaseURL(for: providerID, settings: settings)
+        let apiKey = settings.getAPIKey(for: providerID) ?? ""
+        let current = self.providerFingerprint(baseURL: baseURL, apiKey: apiKey)
+        return current == stored
     }
 }

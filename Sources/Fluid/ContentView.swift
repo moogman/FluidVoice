@@ -1507,6 +1507,10 @@ struct ContentView: View {
         // Check if we're in rewrite or command mode
         let wasRewriteMode = self.isRecordingForRewrite
         let wasCommandMode = self.isRecordingForCommand
+        DebugLogger.shared.info(
+            "Routing decision snapshot | rewrite=\(wasRewriteMode) | command=\(wasCommandMode) | overlay=\(NotchContentState.shared.mode.rawValue)",
+            source: "ContentView"
+        )
 
         if wasRewriteMode {
             self.isRecordingForRewrite = false
@@ -1802,7 +1806,11 @@ struct ContentView: View {
             let hasOriginal = !self.rewriteModeService.originalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let hasContext = !self.rewriteModeService.selectedContextText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             if !hasOriginal, !hasContext {
-                self.rewriteModeService.startWithoutSelection()
+                let captured = self.rewriteModeService.captureSelectedText()
+                DebugLogger.shared.info("Live switch to Edit Text attempted context capture: \(captured)", source: "ContentView")
+                if !captured {
+                    self.rewriteModeService.startWithoutSelection()
+                }
             }
             self.menuBarManager.setOverlayMode(.edit)
         case .write, .rewrite:
@@ -1812,7 +1820,11 @@ struct ContentView: View {
             let hasOriginal = !self.rewriteModeService.originalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let hasContext = !self.rewriteModeService.selectedContextText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             if !hasOriginal, !hasContext {
-                self.rewriteModeService.startWithoutSelection()
+                let captured = self.rewriteModeService.captureSelectedText()
+                DebugLogger.shared.info("Live switch to Edit Text attempted context capture: \(captured)", source: "ContentView")
+                if !captured {
+                    self.rewriteModeService.startWithoutSelection()
+                }
             }
             self.menuBarManager.setOverlayMode(.edit)
         }
