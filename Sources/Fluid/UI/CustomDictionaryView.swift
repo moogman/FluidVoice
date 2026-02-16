@@ -476,26 +476,10 @@ struct BoostTermRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(self.term.text)
                     .font(.callout.weight(.medium))
                     .foregroundStyle(self.theme.palette.accent)
-
-                if let aliases = self.term.aliases, !aliases.isEmpty {
-                    FlowLayout(spacing: 4) {
-                        ForEach(aliases, id: \.self) { alias in
-                            Text(alias)
-                                .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(RoundedRectangle(cornerRadius: 4).fill(.quaternary))
-                        }
-                    }
-                } else {
-                    Text("No aliases")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
             }
 
             Spacer()
@@ -538,13 +522,11 @@ struct BoostTermRow: View {
 
 struct AddBoostTermSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.theme) private var theme
 
     let existingTerms: Set<String>
     let onSave: (ParakeetVocabularyStore.VocabularyConfig.Term) -> Void
 
     @State private var termText = ""
-    @State private var aliasesText = ""
     @State private var strength: BoostStrengthPreset = .balanced
 
     private var normalizedTerm: String {
@@ -561,32 +543,14 @@ struct AddBoostTermSheet: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Add Custom Word")
-                        .font(.headline)
-                    Spacer()
-                    Button("Cancel") { self.dismiss() }
-                        .buttonStyle(.bordered)
-                }
-
-                Divider()
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Add Custom Word")
+                    .font(.headline)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Preferred Word or Phrase")
                         .font(.subheadline.weight(.medium))
                     TextField("FluidVoice", text: self.$termText)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit { self.saveIfValid() }
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Common Variations (optional)")
-                    .font(.subheadline.weight(.medium))
-                    Text("Comma-separated forms that are often misheard.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    TextField("fluid voice, fluid boys", text: self.$aliasesText)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { self.saveIfValid() }
                 }
@@ -611,45 +575,12 @@ struct AddBoostTermSheet: View {
                         .foregroundStyle(.orange)
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Preview")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                    FlowLayout(spacing: 6) {
-                        Text(self.normalizedTerm.isEmpty ? "term" : self.normalizedTerm)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(self.theme.palette.accent)
-                        Text("\(self.strength.rawValue) priority")
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(.quaternary))
-                            .foregroundStyle(.secondary)
-                        ForEach(self.parseAliases(), id: \.self) { alias in
-                            Text(alias)
-                                .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(RoundedRectangle(cornerRadius: 4).fill(.quaternary))
-                        }
-                    }
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(self.theme.palette.cardBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(self.theme.palette.cardBorder.opacity(0.5), lineWidth: 1)
-                        )
-                )
-
                 HStack {
+                    Button("Cancel") { self.dismiss() }
+                        .buttonStyle(.bordered)
                     Spacer()
-                    Button("Add Word") { self.saveIfValid() }
+                    Button("Save") { self.saveIfValid() }
                         .buttonStyle(.borderedProminent)
-                        .tint(self.theme.palette.accent)
                         .disabled(!self.canSave)
                         .keyboardShortcut(.return, modifiers: [])
                 }
@@ -657,20 +588,12 @@ struct AddBoostTermSheet: View {
         }
         .padding(20)
         .frame(minWidth: 420, idealWidth: 460, maxWidth: 520)
-        .frame(minHeight: 420, idealHeight: 500, maxHeight: 640)
+        .frame(minHeight: 300, idealHeight: 340, maxHeight: 460)
         .onAppear {
             // Always start new entries at the recommended default.
             self.termText = ""
-            self.aliasesText = ""
             self.strength = .balanced
         }
-    }
-
-    private func parseAliases() -> [String] {
-        self.aliasesText
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
     }
 
     private func saveIfValid() {
@@ -679,7 +602,7 @@ struct AddBoostTermSheet: View {
             ParakeetVocabularyStore.VocabularyConfig.Term(
                 text: self.normalizedTerm,
                 weight: self.strength.weight,
-                aliases: self.parseAliases()
+                aliases: nil
             )
         )
         self.dismiss()
@@ -690,14 +613,12 @@ struct AddBoostTermSheet: View {
 
 struct EditBoostTermSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.theme) private var theme
 
     let term: ParakeetVocabularyStore.VocabularyConfig.Term
     let existingTerms: Set<String>
     let onSave: (ParakeetVocabularyStore.VocabularyConfig.Term) -> Void
 
     @State private var termText = ""
-    @State private var aliasesText = ""
     @State private var strength: BoostStrengthPreset = .balanced
 
     private var normalizedTerm: String {
@@ -714,32 +635,14 @@ struct EditBoostTermSheet: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Edit Custom Word")
-                        .font(.headline)
-                    Spacer()
-                    Button("Cancel") { self.dismiss() }
-                        .buttonStyle(.bordered)
-                }
-
-                Divider()
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Edit Custom Word")
+                    .font(.headline)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Preferred Word or Phrase")
                         .font(.subheadline.weight(.medium))
                     TextField("FluidVoice", text: self.$termText)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit { self.saveIfValid() }
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Common Variations (optional)")
-                        .font(.subheadline.weight(.medium))
-                    Text("Comma-separated forms that are often misheard.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    TextField("fluid voice, fluid boys", text: self.$aliasesText)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { self.saveIfValid() }
                 }
@@ -764,45 +667,12 @@ struct EditBoostTermSheet: View {
                         .foregroundStyle(.orange)
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Preview")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                    FlowLayout(spacing: 6) {
-                        Text(self.normalizedTerm.isEmpty ? "term" : self.normalizedTerm)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(self.theme.palette.accent)
-                        Text("\(self.strength.rawValue) priority")
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(.quaternary))
-                            .foregroundStyle(.secondary)
-                        ForEach(self.parseAliases(), id: \.self) { alias in
-                            Text(alias)
-                                .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(RoundedRectangle(cornerRadius: 4).fill(.quaternary))
-                        }
-                    }
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(self.theme.palette.cardBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(self.theme.palette.cardBorder.opacity(0.5), lineWidth: 1)
-                        )
-                )
-
                 HStack {
+                    Button("Cancel") { self.dismiss() }
+                        .buttonStyle(.bordered)
                     Spacer()
-                    Button("Save Changes") { self.saveIfValid() }
+                    Button("Save") { self.saveIfValid() }
                         .buttonStyle(.borderedProminent)
-                        .tint(self.theme.palette.accent)
                         .disabled(!self.canSave)
                         .keyboardShortcut(.return, modifiers: [])
                 }
@@ -810,19 +680,11 @@ struct EditBoostTermSheet: View {
         }
         .padding(20)
         .frame(minWidth: 420, idealWidth: 460, maxWidth: 520)
-        .frame(minHeight: 420, idealHeight: 500, maxHeight: 640)
+        .frame(minHeight: 300, idealHeight: 340, maxHeight: 460)
         .onAppear {
             self.termText = self.term.text
-            self.aliasesText = (self.term.aliases ?? []).joined(separator: ", ")
             self.strength = BoostStrengthPreset.nearest(for: self.term.weight ?? BoostStrengthPreset.balanced.weight)
         }
-    }
-
-    private func parseAliases() -> [String] {
-        self.aliasesText
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
     }
 
     private func saveIfValid() {
@@ -831,7 +693,7 @@ struct EditBoostTermSheet: View {
             ParakeetVocabularyStore.VocabularyConfig.Term(
                 text: self.normalizedTerm,
                 weight: self.strength.weight,
-                aliases: self.parseAliases()
+                aliases: nil
             )
         )
         self.dismiss()
