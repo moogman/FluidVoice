@@ -1,0 +1,14 @@
+{
+  "alpha": 2.5,
+  "minCtcScore": -2.0,
+  "minSimilarity": 0.72,
+  "minCombinedConfidence": 0.65,
+  "minTermLength": 3,
+  "terms": [
+    {
+      "text": "FluidVoice",
+      "aliases": ["fluid voice", "fluid boys"],
+      "weight": 12.0
+    }
+  ]
+}

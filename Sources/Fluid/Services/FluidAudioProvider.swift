@@ -13,15 +13,20 @@ final class FluidAudioProvider: TranscriptionProvider {
         true
     }
 
-    private var asrManager: AsrManager?
+    private var streamingAsrManager: AsrManager?
+    private var finalAsrManager: AsrManager?
     private(set) var isReady: Bool = false
+    private(set) var isWordBoostingActive: Bool = false
+    private(set) var boostedVocabularyTermsCount: Int = 0
 
     /// Optional model override - if set, uses this model instead of the global setting.
     /// Used for downloading specific models without changing the active selection.
     var modelOverride: SettingsStore.SpeechModel?
+    private let configureWordBoosting: Bool
 
-    init(modelOverride: SettingsStore.SpeechModel? = nil) {
+    init(modelOverride: SettingsStore.SpeechModel? = nil, configureWordBoosting: Bool = true) {
         self.modelOverride = modelOverride
+        self.configureWordBoosting = configureWordBoosting
     }
 
     func prepare(progressHandler: ((Double) -> Void)? = nil) async throws {
@@ -29,6 +34,7 @@ final class FluidAudioProvider: TranscriptionProvider {
 
         let selectedModel = self.modelOverride ?? SettingsStore.shared.selectedSpeechModel
         DebugLogger.shared.info("FluidAudioProvider: Starting model preparation for \(selectedModel.displayName)", source: "FluidAudioProvider")
+        progressHandler?(0.05)
 
         // Download and load models
         let models: AsrModels
@@ -39,18 +45,64 @@ final class FluidAudioProvider: TranscriptionProvider {
             // Default to v3 (Multilingual)
             models = try await AsrModels.downloadAndLoad(version: .v3)
         }
+        progressHandler?(0.70)
 
-        // Initialize AsrManager
+        // Single manager path minimizes memory on low-resource devices.
         let manager = AsrManager(config: ASRConfig.default)
         try await manager.initialize(models: models)
-        self.asrManager = manager
+
+        self.isWordBoostingActive = false
+        self.boostedVocabularyTermsCount = 0
+
+        if self.configureWordBoosting {
+            do {
+                if let vocabBundle = try await ParakeetVocabularyStore.shared.loadTokenizedVocabularyBundle() {
+                    try await manager.configureVocabularyBoosting(
+                        vocabulary: vocabBundle.vocabulary,
+                        ctcModels: vocabBundle.ctcModels
+                    )
+                    self.isWordBoostingActive = true
+                    self.boostedVocabularyTermsCount = vocabBundle.vocabulary.terms.count
+                    DebugLogger.shared.info(
+                        "FluidAudioProvider: Enabled vocabulary boosting with \(self.boostedVocabularyTermsCount) terms",
+                        source: "FluidAudioProvider"
+                    )
+                } else {
+                    DebugLogger.shared.debug("FluidAudioProvider: No vocabulary boost terms found; using base ASR manager", source: "FluidAudioProvider")
+                }
+            } catch {
+                DebugLogger.shared.warning("FluidAudioProvider: Failed to configure vocabulary boosting: \(error)", source: "FluidAudioProvider")
+            }
+        }
+
+        // Boosting now applies in both streaming and final paths.
+        self.streamingAsrManager = manager
+        self.finalAsrManager = manager
 
         self.isReady = true
+        progressHandler?(1.0)
         DebugLogger.shared.info("FluidAudioProvider: Models ready", source: "FluidAudioProvider")
     }
 
     func transcribe(_ samples: [Float]) async throws -> ASRTranscriptionResult {
-        guard let manager = asrManager else {
+        try await self.transcribeFinal(samples)
+    }
+
+    func transcribeStreaming(_ samples: [Float]) async throws -> ASRTranscriptionResult {
+        guard let manager = self.streamingAsrManager else {
+            throw NSError(
+                domain: "FluidAudioProvider",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "ASR manager not initialized"]
+            )
+        }
+
+        let result = try await manager.transcribe(samples, source: AudioSource.microphone)
+        return ASRTranscriptionResult(text: result.text, confidence: result.confidence)
+    }
+
+    func transcribeFinal(_ samples: [Float]) async throws -> ASRTranscriptionResult {
+        guard let manager = self.finalAsrManager ?? self.streamingAsrManager else {
             throw NSError(
                 domain: "FluidAudioProvider",
                 code: -1,
@@ -96,13 +148,16 @@ final class FluidAudioProvider: TranscriptionProvider {
         }
 
         self.isReady = false
-        self.asrManager = nil
+        self.streamingAsrManager = nil
+        self.finalAsrManager = nil
+        self.isWordBoostingActive = false
+        self.boostedVocabularyTermsCount = 0
     }
 
     /// Provides direct access to the underlying AsrManager for advanced use cases
     /// (e.g., MeetingTranscriptionService sharing)
     var underlyingManager: AsrManager? {
-        return self.asrManager
+        return self.streamingAsrManager
     }
 }
 #else
@@ -112,7 +167,7 @@ final class FluidAudioProvider: TranscriptionProvider {
     var isAvailable: Bool { false }
     var isReady: Bool { false }
 
-    init(modelOverride: SettingsStore.SpeechModel? = nil) {
+    init(modelOverride: SettingsStore.SpeechModel? = nil, configureWordBoosting: Bool = true) {
         // Intel stub - parameter ignored
     }
 
