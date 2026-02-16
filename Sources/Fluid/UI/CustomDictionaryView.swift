@@ -6,6 +6,7 @@
 //  Created: 2025-12-21
 //
 
+import AppKit
 import SwiftUI
 
 struct CustomDictionaryView: View {
@@ -17,6 +18,13 @@ struct CustomDictionaryView: View {
     // Collapsible section states
     @State private var isOfflineSectionExpanded = true
     @State private var isAISectionExpanded = false
+
+    @State private var aiVocabularyJSON = ""
+    @State private var aiVocabularyDirty = false
+    @State private var aiVocabularyStatusMessage = "Parakeet word boosting uses JSON from your local app data."
+    @State private var aiVocabularyStatusColor: Color = .secondary
+    @State private var aiVocabularyHasError = false
+    @State private var hasLoadedAIVocabularyJSON = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -47,6 +55,9 @@ struct CustomDictionaryView: View {
                     self.saveEntries()
                 }
             }
+        }
+        .onAppear {
+            self.loadAIVocabularyJSONIfNeeded()
         }
     }
 
@@ -223,17 +234,19 @@ struct CustomDictionaryView: View {
                         Text("AI Post-Processing")
                             .font(.headline)
 
-                        // AI badge
-                        Text("AI")
+                        Text("WORD BOOST")
                             .font(.caption2.weight(.semibold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(RoundedRectangle(cornerRadius: 4).fill(.purple.opacity(0.2)))
-                            .foregroundStyle(.purple)
+                            .background(RoundedRectangle(cornerRadius: 4).fill(self.theme.palette.accent.opacity(0.2)))
+                            .foregroundStyle(self.theme.palette.accent)
 
-                        Text("COMING SOON")
+                        Text("\(self.aiVocabularyTermCount)")
                             .font(.caption2.weight(.medium))
-                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(.quaternary))
+                            .foregroundStyle(.secondary)
 
                         Spacer()
                     }
@@ -245,33 +258,71 @@ struct CustomDictionaryView: View {
                     Divider()
                         .padding(.vertical, 12)
 
-                    // Description
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Context-aware corrections powered by your AI provider. The AI will understand context and apply intelligent replacements.")
+                        Text("Configure Parakeet word boosting terms in JSON. This file is stored in Application Support and merged with your Instant Replacement entries.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
-                        // Planned features
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label("Context-aware replacements", systemImage: "brain.head.profile")
-                            Label("Learns from your corrections", systemImage: "sparkles")
-                            Label("Works with technical jargon", systemImage: "wrench.and.screwdriver")
-                            Label("Requires AI provider API key", systemImage: "key")
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        TextEditor(text: self.$aiVocabularyJSON)
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .frame(minHeight: 220)
+                            .padding(8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(self.theme.palette.contentBackground.opacity(0.7))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(self.theme.palette.cardBorder.opacity(0.4), lineWidth: 1)
+                                    )
+                            )
+                            .onChange(of: self.aiVocabularyJSON) { _, _ in
+                                self.aiVocabularyDirty = true
+                            }
 
-                        // Coming soon message
+                        HStack(spacing: 8) {
+                            Button("Save JSON") {
+                                self.saveAIVocabularyJSON()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(self.theme.palette.accent)
+
+                            Button("Reload") {
+                                self.loadAIVocabularyJSONIfNeeded(force: true)
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button("Open File") {
+                                self.openAIVocabularyFileInFinder()
+                            }
+                            .buttonStyle(.bordered)
+
+                            Spacer()
+
+                            if self.aiVocabularyDirty {
+                                Text("Unsaved changes")
+                                    .font(.caption2)
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+
                         HStack {
-                            Image(systemName: "hammer.fill")
-                                .foregroundStyle(.orange)
-                            Text("This feature is under development")
+                            Image(systemName: self.aiVocabularyHasError ? "xmark.circle.fill" : "checkmark.circle.fill")
+                                .foregroundStyle(self.aiVocabularyStatusColor)
+                            Text(self.aiVocabularyStatusMessage)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(self.aiVocabularyHasError ? .red : .secondary)
                         }
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(.orange.opacity(0.1)))
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(self.aiVocabularyHasError ? Color.red.opacity(0.08) : self.theme.palette.contentBackground.opacity(0.6))
+                        )
+
+                        Text(self.aiVocabularyFilePathLabel)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.tertiary)
+                            .textSelection(.enabled)
                     }
                 }
             }
@@ -285,6 +336,64 @@ struct CustomDictionaryView: View {
         SettingsStore.shared.customDictionaryEntries = self.entries
         // Invalidate cached regex patterns so changes take effect immediately
         ASRService.invalidateDictionaryCache()
+        NotificationCenter.default.post(name: .parakeetVocabularyDidChange, object: nil)
+    }
+
+    private var aiVocabularyTermCount: Int {
+        (try? ParakeetVocabularyStore.shared.validateJSON(self.aiVocabularyJSON).terms.count) ?? 0
+    }
+
+    private var aiVocabularyFilePathLabel: String {
+        if let url = try? ParakeetVocabularyStore.shared.vocabularyFileURL() {
+            return "Local file: \(url.path)"
+        }
+        return "Local file: unavailable"
+    }
+
+    private func loadAIVocabularyJSONIfNeeded(force: Bool = false) {
+        if self.hasLoadedAIVocabularyJSON && !force && self.aiVocabularyDirty {
+            return
+        }
+
+        do {
+            self.aiVocabularyJSON = try ParakeetVocabularyStore.shared.loadRawJSON()
+            self.aiVocabularyDirty = false
+            self.hasLoadedAIVocabularyJSON = true
+            self.aiVocabularyStatusMessage = "Loaded vocabulary JSON from local app data."
+            self.aiVocabularyStatusColor = .secondary
+            self.aiVocabularyHasError = false
+        } catch {
+            self.aiVocabularyJSON = ParakeetVocabularyStore.defaultTemplateJSON()
+            self.aiVocabularyDirty = true
+            self.aiVocabularyStatusMessage = "Failed to load file: \(error.localizedDescription)"
+            self.aiVocabularyStatusColor = .red
+            self.aiVocabularyHasError = true
+        }
+    }
+
+    private func saveAIVocabularyJSON() {
+        do {
+            try ParakeetVocabularyStore.shared.saveRawJSON(self.aiVocabularyJSON)
+            self.aiVocabularyDirty = false
+            self.aiVocabularyStatusMessage = "Saved. Word boosting updates apply the next time the speech model prepares."
+            self.aiVocabularyStatusColor = .secondary
+            self.aiVocabularyHasError = false
+        } catch {
+            self.aiVocabularyStatusMessage = "Save failed: \(error.localizedDescription)"
+            self.aiVocabularyStatusColor = .red
+            self.aiVocabularyHasError = true
+        }
+    }
+
+    private func openAIVocabularyFileInFinder() {
+        do {
+            let url = try ParakeetVocabularyStore.shared.ensureVocabularyFileExists()
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } catch {
+            self.aiVocabularyStatusMessage = "Unable to open file: \(error.localizedDescription)"
+            self.aiVocabularyStatusColor = .red
+            self.aiVocabularyHasError = true
+        }
     }
 
     private func deleteEntry(_ entry: SettingsStore.CustomDictionaryEntry) {
