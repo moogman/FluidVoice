@@ -2230,7 +2230,6 @@ struct ContentView: View {
             // Reset recording mode flags
             if self.activeRecordingMode != .none {
                 self.clearActiveRecordingMode()
-                self.menuBarManager.setOverlayMode(.dictation)
                 handled = true
             }
 
