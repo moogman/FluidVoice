@@ -246,39 +246,37 @@ extension VoiceEngineSettingsView {
                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: model.id)
             }
 
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: supportsParakeetCustomWords ? "checkmark.seal.fill" : "sparkles")
-                    .font(.caption)
-                    .foregroundStyle(Color.fluidGreen)
+            if supportsParakeetCustomWords {
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.caption)
+                        .foregroundStyle(Color.fluidGreen)
 
-                Text(
-                    supportsParakeetCustomWords
-                        ? "Custom Words supported on Parakeet. Teach names, product terms, and uncommon words for better accuracy."
-                        : "Custom Words are available on Parakeet models. Switch to Parakeet to teach names, product terms, and uncommon words."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(3)
+                    Text("Custom Words supported on Parakeet. Teach names, product terms, and uncommon words for better accuracy.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
 
-                Spacer(minLength: 8)
+                    Spacer(minLength: 8)
 
-                Button("Open Custom Dictionary") {
-                    NotificationCenter.default.post(name: .openCustomDictionaryFromVoiceEngine, object: nil)
+                    Button("Open Custom Dictionary") {
+                        NotificationCenter.default.post(name: .openCustomDictionaryFromVoiceEngine, object: nil)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.fluidGreen)
+                    .controlSize(.small)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.fluidGreen)
-                .controlSize(.small)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.fluidGreen.opacity(0.10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.fluidGreen.opacity(0.30), lineWidth: 1)
+                        )
+                )
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.fluidGreen.opacity(0.10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.fluidGreen.opacity(0.30), lineWidth: 1)
-                    )
-            )
         }
         .padding(.vertical, 6)
     }
