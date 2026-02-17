@@ -21,6 +21,7 @@ final class SettingsStore: ObservableObject {
         self.scrubSavedProviderAPIKeys()
         self.migrateDictationPromptProfilesIfNeeded()
         self.normalizePromptSelectionsIfNeeded()
+        self.migrateOverlayBottomOffsetTo50IfNeeded()
     }
 
     // Keys
@@ -101,6 +102,7 @@ final class SettingsStore: ObservableObject {
         // Overlay Position
         static let overlayPosition = "OverlayPosition"
         static let overlayBottomOffset = "OverlayBottomOffset"
+        static let overlayBottomOffsetMigratedTo50 = "OverlayBottomOffsetMigratedTo50"
         static let overlaySize = "OverlaySize"
         static let transcriptionPreviewCharLimit = "TranscriptionPreviewCharLimit"
 
@@ -1005,7 +1007,7 @@ final class SettingsStore: ObservableObject {
     var overlayBottomOffset: Double {
         get {
             let value = self.defaults.double(forKey: Keys.overlayBottomOffset)
-            return value == 0.0 ? 80.0 : value // Default to 80.0
+            return value == 0.0 ? 50.0 : value // Default to 50.0
         }
         set {
             objectWillChange.send()
@@ -1696,6 +1698,16 @@ final class SettingsStore: ObservableObject {
         {
             self.selectedEditPromptID = nil
         }
+    }
+
+    private func migrateOverlayBottomOffsetTo50IfNeeded() {
+        if self.defaults.bool(forKey: Keys.overlayBottomOffsetMigratedTo50) {
+            return
+        }
+
+        self.defaults.set(50.0, forKey: Keys.overlayBottomOffset)
+        self.defaults.set(true, forKey: Keys.overlayBottomOffsetMigratedTo50)
+        NotificationCenter.default.post(name: NSNotification.Name("OverlayOffsetChanged"), object: nil)
     }
 
     private func scrubSavedProviderAPIKeys() {
