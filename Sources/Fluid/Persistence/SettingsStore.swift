@@ -17,6 +17,7 @@ final class SettingsStore: ObservableObject {
     private let keychain = KeychainService.shared
 
     private init() {
+        self.ensureDebugLoggingDefaults()
         self.migrateProviderAPIKeysIfNeeded()
         self.scrubSavedProviderAPIKeys()
         self.migrateDictationPromptProfilesIfNeeded()
@@ -762,12 +763,23 @@ final class SettingsStore: ObservableObject {
     }
 
     var enableDebugLogs: Bool {
-        get { self.defaults.bool(forKey: Keys.enableDebugLogs) }
+        get {
+            let value = self.defaults.object(forKey: Keys.enableDebugLogs)
+            if value == nil { return true }
+            return self.defaults.bool(forKey: Keys.enableDebugLogs)
+        }
         set {
             objectWillChange.send()
             self.defaults.set(newValue, forKey: Keys.enableDebugLogs)
             DebugLogger.shared.refreshLoggingEnabled()
         }
+    }
+
+    private func ensureDebugLoggingDefaults() {
+        if self.defaults.object(forKey: Keys.enableDebugLogs) == nil {
+            self.defaults.set(true, forKey: Keys.enableDebugLogs)
+        }
+        DebugLogger.shared.refreshLoggingEnabled()
     }
 
     var selectedModel: String? {

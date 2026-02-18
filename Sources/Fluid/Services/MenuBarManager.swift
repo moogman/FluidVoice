@@ -17,6 +17,7 @@ final class MenuBarManager: ObservableObject {
     // Cached menu items to avoid rebuilding entire menu
     private var statusMenuItem: NSMenuItem?
     private var aiMenuItem: NSMenuItem?
+    private var rollbackMenuItem: NSMenuItem?
 
     // References to app state
     private weak var asrService: ASRService?
@@ -352,6 +353,18 @@ final class MenuBarManager: ObservableObject {
 
         menu.addItem(.separator())
 
+        let rollbackMenuItem = NSMenuItem(
+            title: "Rollback to Previous Version...",
+            action: #selector(rollbackToPreviousVersion(_:)),
+            keyEquivalent: ""
+        )
+        rollbackMenuItem.target = self
+        rollbackMenuItem.isEnabled = SimpleUpdater.shared.hasRollbackBackup()
+        menu.addItem(rollbackMenuItem)
+        self.rollbackMenuItem = rollbackMenuItem
+
+        menu.addItem(.separator())
+
         // Quit
         let quitItem = NSMenuItem(
             title: "Quit Fluid Voice",
@@ -385,6 +398,9 @@ final class MenuBarManager: ObservableObject {
         // Update AI toggle text
         let aiTitle = self.aiProcessingEnabled ? "Disable AI Processing" : "Enable AI Processing"
         self.aiMenuItem?.title = aiTitle
+
+        // Update rollback availability text
+        self.rollbackMenuItem?.isEnabled = SimpleUpdater.shared.hasRollbackBackup()
     }
 
     /// Centralized entry point to update AI post-processing enablement.
@@ -444,6 +460,109 @@ final class MenuBarManager: ObservableObject {
                 msg.runModal()
             }
         }
+    }
+
+    @objc private func rollbackToPreviousVersion(_ sender: Any?) {
+        let availableVersion = SimpleUpdater.shared.latestRollbackVersion() ?? ""
+        guard !availableVersion.isEmpty else {
+            let msg = NSAlert()
+            msg.messageText = "No rollback backup found"
+            msg.informativeText = "No previous version backup is available on this device."
+            msg.alertStyle = .informational
+            msg.addButton(withTitle: "Get Previous Builds")
+            msg.addButton(withTitle: "Cancel")
+            if msg.runModal() == .alertFirstButtonReturn {
+                self.openPreviousBuildPicker()
+            }
+            return
+        }
+
+        let confirm = NSAlert()
+        confirm.messageText = "Rollback to \(availableVersion)?"
+        confirm.informativeText = "This will restore the backup and relaunch FluidVoice."
+        confirm.alertStyle = .warning
+        confirm.addButton(withTitle: "Rollback")
+        confirm.addButton(withTitle: "Cancel")
+
+        guard confirm.runModal() == .alertFirstButtonReturn else { return }
+
+        Task { @MainActor in
+            do {
+                try await SimpleUpdater.shared.rollbackToLatestBackup()
+                let success = NSAlert()
+                success.messageText = "Rollback Successful"
+                success.informativeText = "Rolled back to \(availableVersion). FluidVoice will relaunch shortly."
+                success.alertStyle = .informational
+                success.addButton(withTitle: "Report Bug")
+                success.addButton(withTitle: "OK")
+                let response = success.runModal()
+                if response == .alertFirstButtonReturn {
+                    self.openIssueReportingPage()
+                }
+            } catch {
+                let fail = NSAlert()
+                fail.messageText = "Rollback Failed"
+                fail.informativeText = error.localizedDescription
+                fail.alertStyle = .critical
+                fail.addButton(withTitle: "OK")
+                fail.runModal()
+            }
+        }
+    }
+
+    private func openIssueReportingPage() {
+        guard let url = URL(string: "https://github.com/altic-dev/Fluid-oss/issues/new/choose") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func openPreviousBuildPicker() {
+        Task { @MainActor in
+            do {
+                let options = try await SimpleUpdater.shared.fetchRecentReleaseBuildOptions(
+                    owner: "altic-dev",
+                    repo: "Fluid-oss",
+                    limit: 3
+                )
+                self.presentPreviousBuildPicker(options)
+            } catch {
+                self.openAllReleasesPage()
+            }
+        }
+    }
+
+    private func presentPreviousBuildPicker(_ options: [SimpleUpdater.ReleaseBuildOption]) {
+        guard !options.isEmpty else {
+            self.openAllReleasesPage()
+            return
+        }
+
+        let picker = NSAlert()
+        picker.messageText = "Download Previous Build"
+        picker.informativeText = "Choose one of the latest release builds to install manually."
+        picker.alertStyle = .informational
+
+        for option in options {
+            picker.addButton(withTitle: option.version)
+        }
+        picker.addButton(withTitle: "All Releases")
+        picker.addButton(withTitle: "Cancel")
+
+        let response = picker.runModal()
+        let first = NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
+        let index = response.rawValue - first
+
+        if index >= 0 && index < options.count {
+            NSWorkspace.shared.open(options[index].url)
+            return
+        }
+        if index == options.count {
+            self.openAllReleasesPage()
+        }
+    }
+
+    private func openAllReleasesPage() {
+        guard let url = URL(string: "https://github.com/altic-dev/Fluid-oss/releases") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func openMainWindow() {

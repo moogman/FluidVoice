@@ -15,6 +15,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var updateCheckTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Bring up file logging + crash handlers immediately during launch.
+        _ = FileLogger.shared
+        DebugLogger.shared.info("Application launched", source: "AppDelegate")
+
         // Initialize AppUpdater for automatic updates
         // Repository: https://github.com/altic-dev/Fluid-oss
         self.updater = AppUpdater(owner: "altic-dev", repo: "Fluid-oss")
@@ -51,6 +55,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        DebugLogger.shared.info("Application will terminate", source: "AppDelegate")
         // Clean up the update check timer
         self.updateCheckTimer?.invalidate()
         self.updateCheckTimer = nil

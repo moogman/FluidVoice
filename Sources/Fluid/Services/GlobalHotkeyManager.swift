@@ -429,6 +429,10 @@ final class GlobalHotkeyManager: NSObject {
                         self.isKeyPressed = true
                         if self.asrService.isRunning {
                             let isSameMode = self.isDictateRecordingProvider?() ?? false
+                            DebugLogger.shared.debug(
+                                "GlobalHotkeyManager: dictation hold-press path",
+                                source: "GlobalHotkeyManager"
+                            )
                             DebugLogger.shared.info(
                                 "Hotkey route | pressed=dictate | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "stop" : "switch")",
                                 source: "GlobalHotkeyManager"
@@ -447,6 +451,10 @@ final class GlobalHotkeyManager: NSObject {
                 } else {
                     if self.asrService.isRunning {
                         let isSameMode = self.isDictateRecordingProvider?() ?? false
+                        DebugLogger.shared.debug(
+                            "GlobalHotkeyManager: dictation tap path while already running",
+                            source: "GlobalHotkeyManager"
+                        )
                         DebugLogger.shared.info(
                             "Hotkey route | pressed=dictate | active=\(isSameMode ? "dictate" : "other") | asrRunning=true | action=\(isSameMode ? "stop" : "switch")",
                             source: "GlobalHotkeyManager"
@@ -737,6 +745,10 @@ final class GlobalHotkeyManager: NSObject {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
             DebugLogger.shared.info("Command mode hotkey triggered", source: "GlobalHotkeyManager")
+            DebugLogger.shared.debug(
+                "GlobalHotkeyManager: command callback path, isRunning=\(self.asrService.isRunning), isReady=\(self.asrService.isAsrReady)",
+                source: "GlobalHotkeyManager"
+            )
             await self.commandModeCallback?()
         }
     }
@@ -745,6 +757,10 @@ final class GlobalHotkeyManager: NSObject {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
             DebugLogger.shared.info("Rewrite mode hotkey triggered", source: "GlobalHotkeyManager")
+            DebugLogger.shared.debug(
+                "GlobalHotkeyManager: rewrite callback path, isRunning=\(self.asrService.isRunning), isReady=\(self.asrService.isAsrReady)",
+                source: "GlobalHotkeyManager"
+            )
             await self.rewriteModeCallback?()
         }
     }
@@ -752,12 +768,26 @@ final class GlobalHotkeyManager: NSObject {
     private func triggerDictationMode() {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
+            let model = SettingsStore.shared.selectedSpeechModel
             DebugLogger.shared.info("Dictate mode hotkey triggered", source: "GlobalHotkeyManager")
+            DebugLogger.shared.debug(
+                "GlobalHotkeyManager: dictate callback path, isRunning=\(self.asrService.isRunning), isReady=\(self.asrService.isAsrReady), model=\(model.displayName)",
+                source: "GlobalHotkeyManager"
+            )
             if let callback = self.dictationModeCallback {
+                DebugLogger.shared.debug("GlobalHotkeyManager: invoking dictationModeCallback", source: "GlobalHotkeyManager")
                 await callback()
             } else if let startCallback = self.startRecordingCallback {
+                DebugLogger.shared.debug(
+                    "GlobalHotkeyManager: dictationModeCallback missing; invoking fallback callback",
+                    source: "GlobalHotkeyManager"
+                )
                 await startCallback()
             } else {
+                DebugLogger.shared.warning(
+                    "GlobalHotkeyManager: dictation callbacks missing; invoking ASRService.start directly",
+                    source: "GlobalHotkeyManager"
+                )
                 await self.asrService.start()
             }
         }

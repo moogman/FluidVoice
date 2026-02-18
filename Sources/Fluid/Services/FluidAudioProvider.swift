@@ -34,9 +34,16 @@ final class FluidAudioProvider: TranscriptionProvider {
         guard self.isReady == false else { return }
 
         let selectedModel = self.modelOverride ?? SettingsStore.shared.selectedSpeechModel
-        DebugLogger.shared.info("FluidAudioProvider: Starting model preparation for \(selectedModel.displayName)", source: "FluidAudioProvider")
+        let modelVersion: String = selectedModel == .parakeetTDTv2 ? "v2" : "v3"
+        let cacheDirectory = AsrModels.defaultCacheDirectory().deletingLastPathComponent()
+        DebugLogger.shared.info(
+            "FluidAudioProvider: Starting model preparation for \(selectedModel.displayName) [version=\(modelVersion)]",
+            source: "FluidAudioProvider"
+        )
+        DebugLogger.shared.debug("FluidAudioProvider: target cache directory=\(cacheDirectory.path)", source: "FluidAudioProvider")
         progressHandler?(0.05)
 
+        let loadStart = Date()
         // Download and load models
         let models: AsrModels
         if selectedModel == .parakeetTDTv2 {
@@ -46,11 +53,16 @@ final class FluidAudioProvider: TranscriptionProvider {
             // Default to v3 (Multilingual)
             models = try await AsrModels.downloadAndLoad(version: .v3)
         }
+        DebugLogger.shared.debug(
+            "FluidAudioProvider: Models downloadAndLoad returned in \(String(format: "%.2f", Date().timeIntervalSince(loadStart)))s",
+            source: "FluidAudioProvider"
+        )
         progressHandler?(0.70)
 
         // Single manager path minimizes memory on low-resource devices.
         let manager = AsrManager(config: ASRConfig.default)
         try await manager.initialize(models: models)
+        DebugLogger.shared.debug("FluidAudioProvider: AsrManager initialized", source: "FluidAudioProvider")
 
         self.isWordBoostingActive = false
         self.boostedVocabularyTermsCount = 0
@@ -59,6 +71,10 @@ final class FluidAudioProvider: TranscriptionProvider {
         if self.configureWordBoosting {
             do {
                 if let vocabBundle = try await ParakeetVocabularyStore.shared.loadTokenizedVocabularyBundle() {
+                    DebugLogger.shared.debug(
+                        "FluidAudioProvider: Vocabulary bundle loaded with \(vocabBundle.vocabulary.terms.count) terms",
+                        source: "FluidAudioProvider"
+                    )
                     try await manager.configureVocabularyBoosting(
                         vocabulary: vocabBundle.vocabulary,
                         ctcModels: vocabBundle.ctcModels
@@ -76,6 +92,8 @@ final class FluidAudioProvider: TranscriptionProvider {
             } catch {
                 DebugLogger.shared.warning("FluidAudioProvider: Failed to configure vocabulary boosting: \(error)", source: "FluidAudioProvider")
             }
+        } else {
+            DebugLogger.shared.debug("FluidAudioProvider: Word boosting disabled by configuration", source: "FluidAudioProvider")
         }
 
         // Boosting now applies in both streaming and final paths.
@@ -84,7 +102,10 @@ final class FluidAudioProvider: TranscriptionProvider {
 
         self.isReady = true
         progressHandler?(1.0)
-        DebugLogger.shared.info("FluidAudioProvider: Models ready", source: "FluidAudioProvider")
+        DebugLogger.shared.info(
+            "FluidAudioProvider: Models ready [isWordBoostingActive=\(self.isWordBoostingActive), terms=\(self.boostedVocabularyTermsCount)]",
+            source: "FluidAudioProvider"
+        )
     }
 
     func transcribe(_ samples: [Float]) async throws -> ASRTranscriptionResult {
@@ -133,7 +154,12 @@ final class FluidAudioProvider: TranscriptionProvider {
     func clearCache() async throws {
         let baseCacheDir = AsrModels.defaultCacheDirectory().deletingLastPathComponent()
         let selectedModel = self.modelOverride ?? SettingsStore.shared.selectedSpeechModel
+        DebugLogger.shared.info(
+            "FluidAudioProvider: clearCache called for \(selectedModel.displayName)",
+            source: "FluidAudioProvider"
+        )
 
+        let start = Date()
         if selectedModel == .parakeetTDTv2 {
             // Clear v2 cache only
             let v2CacheDir = baseCacheDir.appendingPathComponent("parakeet-tdt-0.6b-v2-coreml")
@@ -149,6 +175,11 @@ final class FluidAudioProvider: TranscriptionProvider {
                 DebugLogger.shared.info("FluidAudioProvider: Deleted Parakeet v3 cache", source: "FluidAudioProvider")
             }
         }
+
+        DebugLogger.shared.debug(
+            "FluidAudioProvider: clearCache completed in \(String(format: "%.3f", Date().timeIntervalSince(start)))s",
+            source: "FluidAudioProvider"
+        )
 
         self.isReady = false
         self.streamingAsrManager = nil

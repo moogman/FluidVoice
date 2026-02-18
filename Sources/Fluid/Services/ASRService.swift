@@ -137,7 +137,6 @@ final class ASRService: ObservableObject {
 
     /// Cached providers to avoid re-instantiation
     private var fluidAudioProvider: FluidAudioProvider?
-    private var qwenAudioProvider: QwenAudioProvider?
     private var whisperProvider: WhisperProvider?
     private var appleSpeechProvider: AppleSpeechProvider?
     /// Stored as Any? because @available cannot be applied to stored properties
@@ -166,7 +165,11 @@ final class ASRService: ObservableObject {
         case .parakeetTDT, .parakeetTDTv2:
             return self.getFluidAudioProvider()
         case .qwen3Asr:
-            return self.getQwenProvider()
+            DebugLogger.shared.warning(
+                "ASRService: Qwen provider removed; falling back to FluidAudio Parakeet path",
+                source: "ASRService"
+            )
+            return self.getFluidAudioProvider()
         default:
             return self.getWhisperProvider()
         }
@@ -179,16 +182,6 @@ final class ASRService: ObservableObject {
         let provider = FluidAudioProvider()
         self.fluidAudioProvider = provider
         DebugLogger.shared.info("ASRService: Created FluidAudio provider", source: "ASRService")
-        return provider
-    }
-
-    private func getQwenProvider() -> QwenAudioProvider {
-        if let existing = qwenAudioProvider {
-            return existing
-        }
-        let provider = QwenAudioProvider()
-        self.qwenAudioProvider = provider
-        DebugLogger.shared.info("ASRService: Created Qwen3 provider", source: "ASRService")
         return provider
     }
 
@@ -251,7 +244,8 @@ final class ASRService: ObservableObject {
             let provider = FluidAudioProvider(modelOverride: model, configureWordBoosting: false)
             return provider
         case .qwen3Asr:
-            return QwenAudioProvider(modelOverride: model)
+            // Qwen support removed; route legacy requests to Parakeet v3.
+            return FluidAudioProvider(modelOverride: .parakeetTDT, configureWordBoosting: false)
         default:
             // Whisper models - create provider with specific model override
             let provider = WhisperProvider(modelOverride: model)
@@ -324,7 +318,6 @@ final class ASRService: ObservableObject {
 
         // Reset cached providers to force re-initialization with new settings
         self.fluidAudioProvider = nil
-        self.qwenAudioProvider = nil
         self.whisperProvider = nil
         self.appleSpeechProvider = nil
         self._appleSpeechAnalyzerProvider = nil
@@ -1854,6 +1847,11 @@ final class ASRService: ObservableObject {
     func ensureAsrReady(progressHandler: ((Double) -> Void)?) async throws {
         let provider = self.transcriptionProvider
         let providerKey = "\(type(of: provider)):\(provider.name)"
+        let model = SettingsStore.shared.selectedSpeechModel
+        DebugLogger.shared.info(
+            "ensureAsrReady() requested for model=\(model.id) [supportsStreaming=\(model.supportsStreaming)] provider=\(providerKey)",
+            source: "ASRService"
+        )
 
         // Single-flight: if a prepare is already running for this provider, await it.
         if let task = ensureReadyTask, ensureReadyProviderKey == providerKey {
@@ -1878,6 +1876,11 @@ final class ASRService: ObservableObject {
     }
 
     private func performEnsureAsrReady(provider: TranscriptionProvider, externalProgressHandler: ((Double) -> Void)? = nil) async throws {
+        DebugLogger.shared.debug(
+            "ensureAsrReady(begin): provider=\(provider.name), providerReady=\(provider.isReady), isAsrReady=\(self.isAsrReady), isRunning=\(self.isRunning)",
+            source: "ASRService"
+        )
+
         // Check if already ready
         if self.isAsrReady, provider.isReady {
             DebugLogger.shared.debug("ASR already ready with loaded models, skipping initialization", source: "ASRService")
@@ -1894,11 +1897,13 @@ final class ASRService: ObservableObject {
 
         let totalStartTime = Date()
         do {
+            let initializationStart = Date()
             DebugLogger.shared.info("=== ASR INITIALIZATION START ===", source: "ASRService")
-            DebugLogger.shared.info("Using provider: \(provider.name)", source: "ASRService")
+            DebugLogger.shared.info("Using provider: \(provider.name) [providerReady=\(provider.isReady)]", source: "ASRService")
 
             let modelsAlreadyCached = provider.modelsExistOnDisk()
             DebugLogger.shared.info("Models already cached on disk: \(modelsAlreadyCached)", source: "ASRService")
+            DebugLogger.shared.debug("Model cache lookup complete in \(String(format: "%.3f", Date().timeIntervalSince(totalStartTime)))s", source: "ASRService")
 
             // Suppress stderr noise during model loading (ALWAYS restore, even on failure).
             let originalStderr = dup(STDERR_FILENO)
@@ -1942,14 +1947,17 @@ final class ASRService: ObservableObject {
             // Use the transcription provider to prepare models
             let downloadStartTime = Date()
             DebugLogger.shared.info("Calling transcriptionProvider.prepare()...", source: "ASRService")
-            try await provider.prepare(progressHandler: { [weak self] progress in
-                DispatchQueue.main.async {
-                    let clamped = max(0.0, min(1.0, progress))
-                    self?.downloadProgress = clamped
-                    // Also call external progress handler if provided
-                    externalProgressHandler?(clamped)
+            try await self.prepareProviderWithRecovery(
+                provider: provider,
+                modelsAlreadyCached: modelsAlreadyCached,
+                progressHandler: { [weak self] progress in
+                    DispatchQueue.main.async {
+                        let clamped = max(0.0, min(1.0, progress))
+                        self?.downloadProgress = clamped
+                        externalProgressHandler?(clamped)
+                    }
                 }
-            })
+            )
             let downloadDuration = Date().timeIntervalSince(downloadStartTime)
             DebugLogger.shared.info("✓ Provider preparation completed in \(String(format: "%.1f", downloadDuration)) seconds", source: "ASRService")
 
@@ -1967,7 +1975,7 @@ final class ASRService: ObservableObject {
                 self.modelsExistOnDisk = true
             }
 
-            let totalDuration = Date().timeIntervalSince(totalStartTime)
+            let totalDuration = Date().timeIntervalSince(initializationStart)
             DebugLogger.shared.info("=== ASR INITIALIZATION COMPLETE ===", source: "ASRService")
             DebugLogger.shared.info("Total initialization time: \(String(format: "%.1f", totalDuration)) seconds", source: "ASRService")
 
@@ -1984,6 +1992,65 @@ final class ASRService: ObservableObject {
             }
             throw error
         }
+    }
+
+    private func prepareProviderWithRecovery(
+        provider: TranscriptionProvider,
+        modelsAlreadyCached: Bool,
+        progressHandler: @escaping (Double) -> Void
+    ) async throws {
+        let start = Date()
+        var firstError: Error?
+        do {
+            try await provider.prepare(progressHandler: progressHandler)
+            DebugLogger.shared.info(
+                "ASRService: Provider '\(provider.name)' prepared successfully in \(String(format: "%.2f", Date().timeIntervalSince(start)))s",
+                source: "ASRService"
+            )
+            return
+        } catch {
+            firstError = error
+            DebugLogger.shared.error("ASRService: First prepare attempt for \(provider.name) failed after \(String(format: "%.2f", Date().timeIntervalSince(start)))s", source: "ASRService")
+            DebugLogger.shared.warning(
+                "ASRService: First prepare failed for \(provider.name): \(error). " +
+                    "Attempting a single recovery by clearing provider cache.",
+                source: "ASRService"
+            )
+        }
+
+        guard modelsAlreadyCached else {
+            DebugLogger.shared.error(
+                "ASRService: Provider cache was empty; recovery retry disabled after first failure for \(provider.name).",
+                source: "ASRService"
+            )
+            throw NSError(
+                domain: "ASRService",
+                code: -2000,
+                userInfo: [NSLocalizedDescriptionKey: "Provider preparation failed: \(self.errorSummary(from: firstError))"]
+            )
+        }
+
+        do {
+            DebugLogger.shared.info("ASRService: Clearing provider cache before retry for \(provider.name)", source: "ASRService")
+            try await provider.clearCache()
+        } catch {
+            DebugLogger.shared.warning(
+                "ASRService: Provider cache clear failed for \(provider.name): \(error)",
+                source: "ASRService"
+            )
+        }
+
+        // One strict retry. If this fails, we let the caller handle the error.
+        try await provider.prepare(progressHandler: progressHandler)
+        DebugLogger.shared.info(
+            "ASRService: Provider '\(provider.name)' prepared successfully after cache-clear retry",
+            source: "ASRService"
+        )
+    }
+
+    private func errorSummary(from error: Error?) -> String {
+        if let error { return error.localizedDescription }
+        return "Unknown error"
     }
 
     private func startParakeetDownloadProgressMonitor() {

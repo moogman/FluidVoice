@@ -550,6 +550,15 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openCustomDictionaryFromVoiceEngine)) { _ in
             self.selectedSidebarItem = .customDictionary
         }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: self.openIssueReportingPage) {
+                    Image(systemName: "ladybug.fill")
+                }
+                .help("Report an issue")
+                .accessibilityLabel("Report an issue")
+            }
+        }
         .overlay(alignment: .center) {}
         .alert(
             self.asr.errorTitle,
@@ -727,6 +736,11 @@ struct ContentView: View {
         self.pendingModifierFlags = []
         self.pendingModifierKeyCode = nil
         self.pendingModifierOnly = false
+    }
+
+    private func openIssueReportingPage() {
+        guard let url = URL(string: "https://github.com/altic-dev/Fluid-oss/issues/new/choose") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private var sidebarView: some View {
@@ -2043,6 +2057,11 @@ struct ContentView: View {
 
     // Capture app context at start to avoid mismatches if the user switches apps mid-session
     private func startRecording() {
+        let model = SettingsStore.shared.selectedSpeechModel
+        DebugLogger.shared.info(
+            "ContentView: startRecording() for model=\(model.displayName), supportsStreaming=\(model.supportsStreaming)",
+            source: "ContentView"
+        )
         self.setActiveRecordingMode(.dictate)
 
         // Ensure normal dictation mode is set (command/rewrite modes set their own)
@@ -2070,6 +2089,7 @@ struct ContentView: View {
         // Pre-load model in background while recording (avoids 10s freeze on stop)
         Task {
             do {
+                DebugLogger.shared.debug("ContentView: pre-load model task started", source: "ContentView")
                 try await self.asr.ensureAsrReady()
                 DebugLogger.shared.debug("Model pre-loaded during recording", source: "ContentView")
             } catch {
@@ -2303,10 +2323,15 @@ struct ContentView: View {
             commandModeShortcutEnabled: self.isCommandModeShortcutEnabled,
             rewriteModeShortcutEnabled: self.isRewriteModeShortcutEnabled,
             startRecordingCallback: {
+                DebugLogger.shared.debug("ContentView: startRecordingCallback invoked by hotkey", source: "ContentView")
                 self.startRecording()
             },
             dictationModeCallback: {
                 DebugLogger.shared.info("Dictate mode triggered", source: "ContentView")
+                DebugLogger.shared.debug(
+                    "ContentView: selected model for dictate hotkey=\(SettingsStore.shared.selectedSpeechModel.displayName)",
+                    source: "ContentView"
+                )
                 self.setActiveRecordingMode(.dictate)
                 self.rewriteModeService.clearState()
                 self.menuBarManager.setOverlayMode(.dictation)

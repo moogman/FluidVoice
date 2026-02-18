@@ -38,7 +38,7 @@ final class ParakeetVocabularyStore {
 
         var errorDescription: String? {
             switch self {
-            case .invalidJSON(let details):
+            case let .invalidJSON(details):
                 return "Invalid vocabulary JSON: \(details)"
             case .applicationSupportUnavailable:
                 return "Could not access Application Support directory."
@@ -66,6 +66,10 @@ final class ParakeetVocabularyStore {
             throw StoreError.applicationSupportUnavailable
         }
         let directory = base.appendingPathComponent(self.appSupportFolder, isDirectory: true)
+        DebugLogger.shared.debug(
+            "ParakeetVocabularyStore: app support directory=\(directory.path)",
+            source: "ParakeetVocabularyStore"
+        )
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent(self.fileName)
     }
@@ -73,6 +77,7 @@ final class ParakeetVocabularyStore {
     @discardableResult
     func ensureVocabularyFileExists() throws -> URL {
         let url = try self.vocabularyFileURL()
+        DebugLogger.shared.debug("ParakeetVocabularyStore: checking vocabulary file \(url.path)", source: "ParakeetVocabularyStore")
         guard !FileManager.default.fileExists(atPath: url.path) else { return url }
 
         if let bundled = Bundle.main.url(forResource: "parakeet_custom_vocabulary.default", withExtension: "json"),
@@ -87,6 +92,7 @@ final class ParakeetVocabularyStore {
 
     func loadRawJSON() throws -> String {
         let url = try self.ensureVocabularyFileExists()
+        DebugLogger.shared.debug("ParakeetVocabularyStore: loading raw JSON from \(url.path)", source: "ParakeetVocabularyStore")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -153,8 +159,16 @@ final class ParakeetVocabularyStore {
             minTermLength: nil,
             terms: []
         )
+        DebugLogger.shared.debug(
+            "ParakeetVocabularyStore: loaded base config terms=\(parsed.terms.count)",
+            source: "ParakeetVocabularyStore"
+        )
 
         let mergedTerms = self.mergeAndNormalizeTerms(jsonTerms: parsed.terms, dictionaryEntries: SettingsStore.shared.customDictionaryEntries)
+        DebugLogger.shared.debug(
+            "ParakeetVocabularyStore: merged terms=\(mergedTerms.count), dictionaryEntries=\(SettingsStore.shared.customDictionaryEntries.count)",
+            source: "ParakeetVocabularyStore"
+        )
 
         return ResolvedConfig(
             // Backend-tuned values: avoid stale/aggressive values from old JSON files.
@@ -171,6 +185,10 @@ final class ParakeetVocabularyStore {
         jsonTerms: [VocabularyConfig.Term],
         dictionaryEntries: [SettingsStore.CustomDictionaryEntry]
     ) -> [VocabularyConfig.Term] {
+        DebugLogger.shared.debug(
+            "ParakeetVocabularyStore: merge input jsonTerms=\(jsonTerms.count), dictionaryEntries=\(dictionaryEntries.count)",
+            source: "ParakeetVocabularyStore"
+        )
         var mergedByText: [String: VocabularyConfig.Term] = [:]
 
         func normalizeAliases(_ aliases: [String]?, excluding text: String) -> [String]? {
@@ -218,9 +236,14 @@ final class ParakeetVocabularyStore {
             upsert(VocabularyConfig.Term(text: replacement, weight: 8.0, aliases: aliases))
         }
 
-        return mergedByText.values.sorted { lhs, rhs in
+        let merged = mergedByText.values.sorted { lhs, rhs in
             lhs.text.localizedCaseInsensitiveCompare(rhs.text) == .orderedAscending
         }
+        DebugLogger.shared.debug(
+            "ParakeetVocabularyStore: merge output count=\(merged.count)",
+            source: "ParakeetVocabularyStore"
+        )
+        return merged
     }
 
     private static func normalizeUserTerms(_ terms: [VocabularyConfig.Term], maxTerms: Int) -> [VocabularyConfig.Term] {
@@ -289,9 +312,17 @@ extension ParakeetVocabularyStore {
         maxTerms: Int = 256
     ) async throws -> (vocabulary: CustomVocabularyContext, ctcModels: CtcModels)? {
         let resolved = try self.loadResolvedConfig()
-        guard !resolved.terms.isEmpty else { return nil }
+        DebugLogger.shared.debug("ParakeetVocabularyStore: resolved vocabulary term count=\(resolved.terms.count)", source: "ParakeetVocabularyStore")
+        guard !resolved.terms.isEmpty else {
+            DebugLogger.shared.debug("ParakeetVocabularyStore: no resolved terms; returning nil bundle", source: "ParakeetVocabularyStore")
+            return nil
+        }
 
         let cappedLimit = min(maxTerms, Defaults.maxTerms)
+        DebugLogger.shared.debug(
+            "ParakeetVocabularyStore: maxTerms=\(maxTerms), cappedLimit=\(cappedLimit)",
+            source: "ParakeetVocabularyStore"
+        )
         // Keep high-priority terms when capping large vocab sets.
         let prioritizedTerms = resolved.terms.sorted { lhs, rhs in
             let lhsWeight = lhs.weight ?? 0
@@ -302,7 +333,15 @@ extension ParakeetVocabularyStore {
             return lhsWeight > rhsWeight
         }
         let cappedTerms = Array(prioritizedTerms.prefix(cappedLimit))
+        DebugLogger.shared.debug(
+            "ParakeetVocabularyStore: capped terms count=\(cappedTerms.count)",
+            source: "ParakeetVocabularyStore"
+        )
         let ctcModels = try await CtcModels.downloadAndLoad(variant: .ctc110m)
+        DebugLogger.shared.debug(
+            "ParakeetVocabularyStore: ctc model loaded variant=\(ctcModels.variant)",
+            source: "ParakeetVocabularyStore"
+        )
         let ctcTokenizer = try await CtcTokenizer.load(from: CtcModels.defaultCacheDirectory(for: ctcModels.variant))
 
         let tokenizedTerms: [CustomVocabularyTerm] = cappedTerms.compactMap { term in
@@ -317,7 +356,11 @@ extension ParakeetVocabularyStore {
             )
         }
 
-        guard !tokenizedTerms.isEmpty else { return nil }
+        DebugLogger.shared.debug("ParakeetVocabularyStore: tokenized term count=\(tokenizedTerms.count)", source: "ParakeetVocabularyStore")
+        guard !tokenizedTerms.isEmpty else {
+            DebugLogger.shared.debug("ParakeetVocabularyStore: tokenization produced empty list; returning nil bundle", source: "ParakeetVocabularyStore")
+            return nil
+        }
 
         let vocabulary = CustomVocabularyContext(
             terms: tokenizedTerms,
@@ -326,6 +369,10 @@ extension ParakeetVocabularyStore {
             minSimilarity: resolved.minSimilarity,
             minCombinedConfidence: resolved.minCombinedConfidence,
             minTermLength: resolved.minTermLength
+        )
+        DebugLogger.shared.debug(
+            "ParakeetVocabularyStore: prepared tokenized vocabulary with \(vocabulary.terms.count) terms",
+            source: "ParakeetVocabularyStore"
         )
 
         return (vocabulary, ctcModels)
