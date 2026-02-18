@@ -1,5 +1,5 @@
-import Foundation
 import FluidSpeechAnalyzerPluginInterface
+import Foundation
 
 protocol AsyncModelsExistOnDiskChecking {
     func refreshModelsExistOnDiskAsync() async -> Bool

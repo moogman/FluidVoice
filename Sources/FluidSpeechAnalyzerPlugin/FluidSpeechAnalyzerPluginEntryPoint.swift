@@ -1,5 +1,5 @@
-import Foundation
 import FluidSpeechAnalyzerPluginInterface
+import Foundation
 
 public final class FluidSpeechAnalyzerPluginEntryPoint: SpeechAnalyzerPluginEntryPoint {
     public static func makeProvider(logSink: (any SpeechAnalyzerPluginLogger)?) -> (any SpeechAnalyzerProvider)? {

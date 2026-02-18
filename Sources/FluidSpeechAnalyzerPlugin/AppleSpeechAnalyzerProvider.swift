@@ -1,8 +1,8 @@
 #if ENABLE_SPEECH_ANALYZER
 
 import AVFoundation
-import Foundation
 import FluidSpeechAnalyzerPluginInterface
+import Foundation
 
 #if canImport(Speech)
 import Speech

@@ -1,5 +1,5 @@
-import Foundation
 import FluidSpeechAnalyzerPluginInterface
+import Foundation
 
 extension DebugLogger: SpeechAnalyzerPluginLogger {}
 
