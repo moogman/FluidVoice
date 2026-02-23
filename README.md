@@ -198,10 +198,15 @@ Analytics are enabled by default. You can disable or re-enable them at any time 
 ### Why this exists
 Anonymous telemetry helps us understand what breaks, where performance can be improved, and which features matter most without collecting personal content.
 
+## License History
+
+- Versions before **2026-02-23**: Apache License 2.0
+- Versions on and after **2026-02-23**: GNU General Public License v3.0 (GPLv3)
+
 ## License
 
 From 2026-02-23 onward, this project is licensed under the [GNU General Public License, Version 3.0 (GPLv3)](LICENSE).
 
-Commits made before 2026-02-23 were published under the prior license terms.
+Versions published before this date were licensed under Apache License 2.0.
 
 ---
